@@ -1,12 +1,15 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import router from "../router";
 
-// 基础API URL
-const API_URL =
-  import.meta.env.VITE_API_URL || "http://localhost:8080/api/cheese-auth";
-// 沙盒API URL
-const SANDBOX_URL =
-  import.meta.env.VITE_SANDBOX_URL || "http://localhost:8080/api/sandbox";
+const runtimeConfig = window.runtimeConfig || {
+  VITE_API_URL:
+    import.meta.env.VITE_API_URL || "http://localhost:8080/api/cheese-auth",
+  VITE_SANDBOX_URL:
+    import.meta.env.VITE_SANDBOX_URL || "http://localhost:8080/api/sandbox",
+};
+
+const API_URL = runtimeConfig.VITE_API_URL;
+const SANDBOX_URL = runtimeConfig.VITE_SANDBOX_URL;
 
 // 创建主API客户端实例
 export const apiClient = axios.create({
