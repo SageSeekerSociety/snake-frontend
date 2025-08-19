@@ -1,6 +1,7 @@
 import { GameRecording, GameRecordingFrame } from "../types/GameRecording";
 import { GameState } from "../types/GameState";
 import { User } from "../types/User";
+import { VortexFieldApiData } from "../types/VortexField";
 
 // IndexedDB database name and store name
 const DB_NAME = "SnakeGameDB";
@@ -49,7 +50,7 @@ export class GameRecordingService {
   /**
    * Start recording a new game session
    */
-  startRecording(players: User[], totalTicks: number, initialGameState?: GameState): void {
+  startRecording(players: User[], totalTicks: number, initialGameState?: GameState, initialVortexFieldData?: VortexFieldApiData): void {
     if (this.isRecording) {
       console.warn("Already recording a game session");
       return;
@@ -73,10 +74,18 @@ export class GameRecordingService {
     if (initialGameState) {
       try {
         // 创建一个深拷贝以避免引用问题
-        const stateCopy: GameState = {
+        const stateCopy = {
           snakes: initialGameState.snakes.map(snake => this.sanitizeObject(snake.serialize())),
           foodItems: initialGameState.foodItems.map(food => this.sanitizeObject(food.serialize())),
-          obstacles: initialGameState.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize()))
+          obstacles: initialGameState.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize())),
+          vortexField: this.sanitizeObject(initialVortexFieldData || {
+            stateCode: 0,
+            param1: 0,
+            param2: 0,
+            param3: 0,
+            param4: 0,
+            param5: 0
+          })
         };
 
         // 添加初始帧（tick为0）
@@ -99,7 +108,7 @@ export class GameRecordingService {
   /**
    * Record a single frame (tick) of the game
    */
-  recordFrame(tick: number, gameState: GameState): void {
+  recordFrame(tick: number, gameState: GameState, vortexFieldData: VortexFieldApiData): void {
     if (!this.isRecording || !this.recording) {
       console.warn("Not currently recording");
       return;
@@ -107,10 +116,11 @@ export class GameRecordingService {
 
     try {
       // Create a deep copy of the game state to avoid reference issues
-      const stateCopy: GameState = {
+      const stateCopy = {
         snakes: gameState.snakes.map(snake => this.sanitizeObject(snake.serialize())),
         foodItems: gameState.foodItems.map(food => this.sanitizeObject(food.serialize())),
-        obstacles: gameState.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize()))
+        obstacles: gameState.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize())),
+        vortexField: this.sanitizeObject(vortexFieldData)
       };
 
       const frame: GameRecordingFrame = {
@@ -298,7 +308,8 @@ export class GameRecordingService {
       gameState: {
         snakes: frame.gameState.snakes,
         foodItems: frame.gameState.foodItems,
-        obstacles: frame.gameState.obstacles
+        obstacles: frame.gameState.obstacles,
+        vortexField: frame.gameState.vortexField
       }
     }));
   }

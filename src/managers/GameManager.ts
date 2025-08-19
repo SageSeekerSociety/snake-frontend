@@ -211,11 +211,13 @@ export class GameManager {
     try {
       // 获取当前游戏状态作为初始状态（第0帧）
       const initialGameState = this.entityManager.getGameState();
+      const initialVortexFieldData = this.vortexFieldManager.getApiData();
 
       gameRecordingService.startRecording(
         this.selectedUsers,
         this.gameClock.getTotalTicks(),
-        initialGameState // 传递初始游戏状态
+        initialGameState, // 传递初始游戏状态
+        initialVortexFieldData // 传递初始涡流场状态
       );
       this.isRecording = true;
       console.log("Game recording started with initial state");
@@ -297,7 +299,8 @@ export class GameManager {
 
     try {
       const gameState = this.entityManager.getGameState();
-      gameRecordingService.recordFrame(tick, gameState);
+      const vortexFieldData = this.vortexFieldManager.getApiData();
+      gameRecordingService.recordFrame(tick, gameState, vortexFieldData);
     } catch (error) {
       console.error("Failed to record game frame:", error);
     }
@@ -612,8 +615,8 @@ export class GameManager {
         x: geometry.centerAnchor.x / boxSize,
         y: geometry.centerAnchor.y / boxSize
       },
-      innerRadius: geometry.innerRadius / boxSize,
-      outerRadius: geometry.outerRadius / boxSize
+      innerRadius: geometry.innerRingRadius, // These are already in grid units!
+      outerRadius: geometry.outerRingRadius  // These are already in grid units!
     };
   }
 

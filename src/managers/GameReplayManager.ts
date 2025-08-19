@@ -432,10 +432,19 @@ export class GameReplayManager {
     const foodItems = this.deserializeFoodItems(frame.gameState.foodItems);
     const obstacles = this.deserializeObstacles(frame.gameState.obstacles);
 
+    // Get vortex field data for rendering (stored for future use)
+    const vortexFieldData = frame.gameState.vortexField;
+
     // Render the entities
     const renderables = [...foodItems, ...snakes];
     this.canvasManager.renderObstacles(obstacles);
     this.canvasManager.render(renderables);
+
+    // TODO: Render vortex field if active
+    // This will need to be implemented in CanvasManager
+    if (vortexFieldData && vortexFieldData.stateCode > 0) {
+      console.log(`[Replay] Vortex field active: state=${vortexFieldData.stateCode}, center=(${vortexFieldData.param2}, ${vortexFieldData.param3})`);
+    }
   }
 
   /**

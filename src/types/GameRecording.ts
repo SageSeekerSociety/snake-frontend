@@ -1,12 +1,63 @@
 import { User } from "./User";
-import { GameState } from "./GameState";
+import { Position } from "./Position";
+import { FoodType } from "../config/GameConfig";
+import { EntityType } from "./EntityType";
+import { VortexFieldApiData } from "./VortexField";
+
+// 序列化后的蛇数据结构（对应Snake.serialize()的返回值）
+export interface SerializedSnake {
+  position: Position;
+  size: number;
+  body: Position[];
+  direction: number;
+  score: number;
+  alive: boolean;
+  color: string;
+  shieldActive: boolean;
+  shieldCooldown: number;
+  shieldDuration: number;
+  metadata: {
+    studentId?: string;
+    name?: string;
+    username?: string;
+    [key: string]: any;
+  };
+  entityType: EntityType;
+}
+
+// 序列化后的食物数据结构（对应Food.serialize()的返回值）
+export interface SerializedFood {
+  position: Position;
+  size: number;
+  value: number | string;
+  color: string;
+  type: FoodType;
+  natural: boolean;
+  ttl?: number;
+  entityType: EntityType;
+}
+
+// 序列化后的障碍物数据结构（对应Obstacle.serialize()的返回值）
+export interface SerializedObstacle {
+  position: Position;
+  size: number;
+  entityType: EntityType;
+}
+
+// 录制帧中的游戏状态（序列化后的数据）
+export interface RecordingGameState {
+  foodItems: SerializedFood[];
+  obstacles: SerializedObstacle[];
+  snakes: SerializedSnake[];
+  vortexField: VortexFieldApiData;
+}
 
 /**
  * Represents a single frame (tick) in a game recording
  */
 export interface GameRecordingFrame {
   tick: number;
-  gameState: GameState;
+  gameState: RecordingGameState;
 }
 
 /**

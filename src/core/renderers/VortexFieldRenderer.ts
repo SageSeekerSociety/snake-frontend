@@ -42,7 +42,7 @@ export class VortexFieldRenderer {
   }
   
   /**
-   * Renders the warning phase with pulsing preview
+   * Renders the warning phase with subtle pulsing preview
    */
   private renderWarningPhase(ctx: CanvasRenderingContext2D, vortexState: VortexRenderState, timestamp: number): void {
     if (!vortexState.center) return;
@@ -50,30 +50,30 @@ export class VortexFieldRenderer {
     const { x: cx, y: cy } = vortexState.center;
     const boxSize = GameConfig.CANVAS.BOX_SIZE;
     
-    // Pulsing effect for warning (0.5 to 1.0 alpha)
-    const pulseAlpha = 0.5 + 0.5 * Math.sin(this.animationFrame * 0.2);
+    // Gentle pulsing effect for warning (0.2 to 0.4 alpha)
+    const pulseAlpha = 0.2 + 0.2 * Math.sin(this.animationFrame * 0.15);
     
-    // Draw warning overlay for entire vortex area
+    // Draw warning overlay for outer zone - subtle yellow
     ctx.save();
-    ctx.globalAlpha = pulseAlpha * 0.3;
-    
-    // Outer ring preview - yellow warning
-    this.drawRing(ctx, cx, cy, vortexState.outerRadius, "#ffeb3b", boxSize, true);
-    
-    // Inner ring preview - orange warning  
-    this.drawRing(ctx, cx, cy, vortexState.innerRadius, "#ff9800", boxSize, true);
-    
-    // Lethal singularity preview - red warning
-    this.drawSingularity(ctx, cx, cy, "#ef4444", boxSize, true);
-    
+    ctx.globalAlpha = pulseAlpha;
+    this.drawCircularRegion(ctx, cx, cy, vortexState.outerRadius, "#ffeb3b", boxSize, true);
     ctx.restore();
     
-    // Warning text at center
-    this.drawWarningText(ctx, cx, cy, vortexState.ticksRemaining, boxSize);
+    // Draw warning overlay for inner zone - subtle orange
+    ctx.save();
+    ctx.globalAlpha = pulseAlpha * 0.7;
+    this.drawCircularRegion(ctx, cx, cy, vortexState.innerRadius, "#ff9800", boxSize, true);
+    ctx.restore();
+    
+    // Draw lethal singularity warning - more visible
+    this.drawLethalSingularity(ctx, cx, cy, boxSize, true, this.animationFrame);
+    
+    // Draw subtle warning indicators
+    this.drawWarningIndicators(ctx, cx, cy, vortexState.outerRadius, boxSize, this.animationFrame);
   }
   
   /**
-   * Renders the active vortex field with swirling effects
+   * Renders the active vortex field with moderate effects
    */
   private renderActivePhase(ctx: CanvasRenderingContext2D, vortexState: VortexRenderState, timestamp: number): void {
     if (!vortexState.center) return;
@@ -81,30 +81,26 @@ export class VortexFieldRenderer {
     const { x: cx, y: cy } = vortexState.center;
     const boxSize = GameConfig.CANVAS.BOX_SIZE;
     
-    // Swirling animation
-    const swirl = this.animationFrame * 0.1;
+    // Moderate animated intensity
+    const intensity = 0.3 + 0.2 * Math.sin(this.animationFrame * 0.1);
     
+    // Draw outer zone with green tint
     ctx.save();
-    
-    // Outer ring - green tint (food multiplier zone)
-    ctx.globalAlpha = 0.4 + 0.2 * Math.sin(swirl);
-    this.drawRing(ctx, cx, cy, vortexState.outerRadius, "#4ade80", boxSize, false);
-    
-    // Inner ring - blue tint (higher multiplier zone)
-    ctx.globalAlpha = 0.5 + 0.3 * Math.sin(swirl + 1);
-    this.drawRing(ctx, cx, cy, vortexState.innerRadius, "#3b82f6", boxSize, false);
-    
-    // Lethal singularity - red danger zone
-    ctx.globalAlpha = 0.8 + 0.2 * Math.sin(swirl + 2);
-    this.drawSingularity(ctx, cx, cy, "#ef4444", boxSize, false);
-    
+    ctx.globalAlpha = intensity * 0.6;
+    this.drawCircularRegion(ctx, cx, cy, vortexState.outerRadius, "#4caf50", boxSize, false);
     ctx.restore();
     
-    // Draw swirling particles
-    this.drawSwirlParticles(ctx, cx, cy, vortexState.outerRadius, boxSize, swirl);
+    // Draw inner zone with cyan tint
+    ctx.save(); 
+    ctx.globalAlpha = intensity * 0.7;
+    this.drawCircularRegion(ctx, cx, cy, vortexState.innerRadius, "#00bcd4", boxSize, false);
+    ctx.restore();
     
-    // Draw pull direction indicators
-    this.drawPullIndicators(ctx, cx, cy, vortexState.outerRadius, boxSize, swirl);
+    // Draw active lethal singularity
+    this.drawLethalSingularity(ctx, cx, cy, boxSize, false, this.animationFrame);
+    
+    // Draw subtle energy particles
+    this.drawEnergyParticles(ctx, cx, cy, vortexState.outerRadius, boxSize, this.animationFrame);
   }
   
   /**
@@ -116,28 +112,71 @@ export class VortexFieldRenderer {
     const { x: cx, y: cy } = vortexState.center;
     const boxSize = GameConfig.CANVAS.BOX_SIZE;
     
-    // Fading shield effect
-    const fadeAlpha = Math.max(0.1, vortexState.ticksRemaining / 5); // Assuming 5 tick cooldown
+    // Gentle fading shield effect
+    const fadeAlpha = Math.max(0.1, vortexState.ticksRemaining / 15);
     
     ctx.save();
-    ctx.globalAlpha = fadeAlpha * 0.3;
+    ctx.globalAlpha = fadeAlpha;
     
-    // Draw fading protective aura
-    this.drawRing(ctx, cx, cy, vortexState.outerRadius, "#10b981", boxSize, true);
+    // Draw fading protective aura with blue tint
+    this.drawCircularRegion(ctx, cx, cy, vortexState.outerRadius, "#2196f3", boxSize, true);
     
     ctx.restore();
+    
+    // Fading singularity
+    this.drawLethalSingularity(ctx, cx, cy, boxSize, true, this.animationFrame, fadeAlpha);
   }
   
   /**
-   * Draws a ring around the vortex center
+   * Draws a circular region approximated on the pixel grid
    */
-  private drawRing(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, color: string, boxSize: number, dashed: boolean = false): void {
-    const pixelCx = cx * boxSize + boxSize / 2;
-    const pixelCy = cy * boxSize + boxSize / 2;
-    const pixelRadius = radius * boxSize;
+  private drawCircularRegion(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number, color: string, boxSize: number, dashed: boolean = false): void {
+    // Calculate center in pixel coordinates - ensure proper alignment
+    const pixelCenterX = centerX * boxSize + boxSize;
+    const pixelCenterY = centerY * boxSize + boxSize;
     
+    ctx.fillStyle = color;
     ctx.strokeStyle = color;
-    ctx.lineWidth = dashed ? 2 : 3;
+    ctx.lineWidth = dashed ? 2 : 1;
+    
+    if (dashed) {
+      ctx.setLineDash([6, 3]);
+    } else {
+      ctx.setLineDash([]);
+    }
+    
+    // Draw circular region by checking each grid cell
+    const gridRadius = radius + 0.5; // Slightly larger for better coverage
+    
+    for (let gx = centerX - radius - 1; gx <= centerX + radius + 1; gx++) {
+      for (let gy = centerY - radius - 1; gy <= centerY + radius + 1; gy++) {
+        // Calculate distance from center using Euclidean distance
+        const dx = gx - centerX;
+        const dy = gy - centerY;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance <= gridRadius) {
+          const pixelX = gx * boxSize;
+          const pixelY = gy * boxSize;
+          
+          // Draw with subtle checkerboard pattern
+          if ((gx + gy) % 2 === 0) {
+            ctx.fillRect(pixelX, pixelY, boxSize, boxSize);
+          }
+        }
+      }
+    }
+    
+    // Draw border outline using approximate circle
+    this.drawCircularBorder(ctx, pixelCenterX, pixelCenterY, radius * boxSize, color, dashed);
+  }
+  
+  /**
+   * Draws circular border using line segments
+   */
+  private drawCircularBorder(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radiusPixels: number, color: string, dashed: boolean): void {
+    ctx.strokeStyle = color;
+    ctx.lineWidth = dashed ? 3 : 2;
     
     if (dashed) {
       ctx.setLineDash([8, 4]);
@@ -145,127 +184,141 @@ export class VortexFieldRenderer {
       ctx.setLineDash([]);
     }
     
+    // Draw approximate circle using line segments
     ctx.beginPath();
-    ctx.arc(pixelCx, pixelCy, pixelRadius, 0, Math.PI * 2);
-    ctx.stroke();
-    
-    // Fill with semi-transparent color
-    ctx.fillStyle = color;
-    ctx.globalAlpha *= 0.1;
-    ctx.fill();
-  }
-  
-  /**
-   * Draws the lethal singularity (2x2 center)
-   */
-  private drawSingularity(ctx: CanvasRenderingContext2D, cx: number, cy: number, color: string, boxSize: number, dashed: boolean = false): void {
-    const pixelX = cx * boxSize;
-    const pixelY = cy * boxSize;
-    
-    ctx.fillStyle = color;
-    ctx.strokeStyle = color;
-    ctx.lineWidth = dashed ? 2 : 3;
-    
-    if (dashed) {
-      ctx.setLineDash([4, 2]);
-      ctx.strokeRect(pixelX, pixelY, boxSize * 2, boxSize * 2);
-    } else {
-      ctx.setLineDash([]);
-      ctx.fillRect(pixelX, pixelY, boxSize * 2, boxSize * 2);
+    const segments = 32; // Number of line segments
+    for (let i = 0; i <= segments; i++) {
+      const angle = (i / segments) * Math.PI * 2;
+      const x = centerX + Math.cos(angle) * radiusPixels;
+      const y = centerY + Math.sin(angle) * radiusPixels;
       
-      // Add pulsing border effect
-      ctx.strokeRect(pixelX - 2, pixelY - 2, boxSize * 2 + 4, boxSize * 2 + 4);
+      if (i === 0) {
+        ctx.moveTo(x, y);
+      } else {
+        ctx.lineTo(x, y);
+      }
     }
+    ctx.stroke();
   }
   
   /**
-   * Draws warning text during warning phase
+   * Draws the 2x2 lethal singularity with pixel art style
    */
-  private drawWarningText(ctx: CanvasRenderingContext2D, cx: number, cy: number, ticksRemaining: number, boxSize: number): void {
-    const pixelCx = cx * boxSize + boxSize;
-    const pixelCy = cy * boxSize - 20;
+  private drawLethalSingularity(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, boxSize: number, isWarning: boolean, frame: number, fadeAlpha: number = 1): void {
+    // Center the 2x2 singularity properly
+    const pixelX = centerX * boxSize;
+    const pixelY = centerY * boxSize;
+    const size = boxSize * 2; // 2x2 size
     
     ctx.save();
-    ctx.font = "12px 'Press Start 2P', monospace";
+    ctx.globalAlpha = fadeAlpha;
+    
+    // Base color depends on state
+    const baseColor = isWarning ? "#f44336" : "#d32f2f";
+    const accentColor = isWarning ? "#ffeb3b" : "#ff5722";
+    
+    // Gentle pulsing intensity
+    const pulseIntensity = 0.6 + 0.2 * Math.sin(frame * 0.2);
+    
+    // Draw the 2x2 singularity blocks
+    ctx.fillStyle = baseColor;
+    ctx.globalAlpha = pulseIntensity * fadeAlpha * 0.8;
+    ctx.fillRect(pixelX, pixelY, size, size);
+    
+    // Add subtle cross pattern in center
+    ctx.fillStyle = "#ffffff";
+    ctx.globalAlpha = (0.6 + 0.2 * Math.sin(frame * 0.3)) * fadeAlpha;
+    
+    const centerPx = pixelX + size / 2;
+    const centerPy = pixelY + size / 2;
+    const crossSize = 4;
+    
+    // Horizontal line
+    ctx.fillRect(centerPx - crossSize, centerPy - 1, crossSize * 2, 2);
+    // Vertical line  
+    ctx.fillRect(centerPx - 1, centerPy - crossSize, 2, crossSize * 2);
+    
+    // Add corner accent pixels - more subtle
+    ctx.fillStyle = accentColor;
+    ctx.globalAlpha = pulseIntensity * 0.5 * fadeAlpha;
+    const cornerSize = 3;
+    
+    // Four corners of the 2x2 area
+    ctx.fillRect(pixelX, pixelY, cornerSize, cornerSize);
+    ctx.fillRect(pixelX + size - cornerSize, pixelY, cornerSize, cornerSize);
+    ctx.fillRect(pixelX, pixelY + size - cornerSize, cornerSize, cornerSize);
+    ctx.fillRect(pixelX + size - cornerSize, pixelY + size - cornerSize, cornerSize, cornerSize);
+    
+    // Subtle outer border
+    ctx.strokeStyle = baseColor;
+    ctx.lineWidth = 1;
+    ctx.globalAlpha = (0.4 + 0.2 * Math.sin(frame * 0.25)) * fadeAlpha;
+    ctx.strokeRect(pixelX - 1, pixelY - 1, size + 2, size + 2);
+    
+    ctx.restore();
+  }
+  
+  /**
+   * Draws subtle warning indicators around the field
+   */
+  private drawWarningIndicators(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number, boxSize: number, frame: number): void {
+    const pixelCenterX = centerX * boxSize + boxSize;
+    const pixelCenterY = centerY * boxSize + boxSize;
+    const distance = (radius + 1.5) * boxSize;
+    
+    ctx.save();
+    ctx.fillStyle = "#ff9800";
+    ctx.font = "10px 'Press Start 2P', monospace";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
     
-    // Pulsing warning text
-    const pulse = 0.7 + 0.3 * Math.sin(this.animationFrame * 0.3);
-    ctx.globalAlpha = pulse;
+    // Gentle flashing warning symbols at cardinal directions
+    const flashAlpha = 0.3 + 0.3 * Math.sin(frame * 0.2);
+    ctx.globalAlpha = flashAlpha;
     
-    // Text shadow for better visibility
-    ctx.fillStyle = "black";
-    ctx.fillText(`VORTEX IN ${ticksRemaining}`, pixelCx + 1, pixelCy + 1);
+    const directions = [
+      { x: pixelCenterX, y: pixelCenterY - distance, symbol: "!" },
+      { x: pixelCenterX + distance, y: pixelCenterY, symbol: "!" },
+      { x: pixelCenterX, y: pixelCenterY + distance, symbol: "!" },
+      { x: pixelCenterX - distance, y: pixelCenterY, symbol: "!" }
+    ];
     
-    ctx.fillStyle = "#ffeb3b";
-    ctx.fillText(`VORTEX IN ${ticksRemaining}`, pixelCx, pixelCy);
-    
-    ctx.restore();
-  }
-  
-  /**
-   * Draws swirling particles around the vortex
-   */
-  private drawSwirlParticles(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, boxSize: number, swirl: number): void {
-    const pixelCx = cx * boxSize + boxSize;
-    const pixelCy = cy * boxSize + boxSize;
-    const pixelRadius = radius * boxSize;
-    
-    ctx.save();
-    ctx.fillStyle = "#ffffff";
-    ctx.globalAlpha = 0.6;
-    
-    // Draw 8 particles in a spiral
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2 + swirl;
-      const distance = pixelRadius * 0.7 + 10 * Math.sin(swirl + i);
-      const x = pixelCx + Math.cos(angle) * distance;
-      const y = pixelCy + Math.sin(angle) * distance;
-      
-      ctx.beginPath();
-      ctx.arc(x, y, 2, 0, Math.PI * 2);
-      ctx.fill();
+    for (const dir of directions) {
+      // Shadow for better visibility
+      ctx.fillStyle = "black";
+      ctx.fillText(dir.symbol, dir.x + 1, dir.y + 1);
+      // Main text
+      ctx.fillStyle = "#ff9800";
+      ctx.fillText(dir.symbol, dir.x, dir.y);
     }
     
     ctx.restore();
   }
   
   /**
-   * Draws pull direction indicators
+   * Draws subtle energy particles
    */
-  private drawPullIndicators(ctx: CanvasRenderingContext2D, cx: number, cy: number, radius: number, boxSize: number, swirl: number): void {
-    const pixelCx = cx * boxSize + boxSize;
-    const pixelCy = cy * boxSize + boxSize;
-    const pixelRadius = radius * boxSize;
+  private drawEnergyParticles(ctx: CanvasRenderingContext2D, centerX: number, centerY: number, radius: number, boxSize: number, frame: number): void {
+    const pixelCenterX = centerX * boxSize + boxSize;
+    const pixelCenterY = centerY * boxSize + boxSize;
     
     ctx.save();
-    ctx.strokeStyle = "#ffffff";
-    ctx.lineWidth = 2;
-    ctx.globalAlpha = 0.8;
+    ctx.fillStyle = "#64ffda";
     
-    // Draw 4 arrows pointing inward
-    const directions = [
-      { angle: 0, label: "←" },      // Right to left
-      { angle: Math.PI / 2, label: "↑" },  // Bottom to top
-      { angle: Math.PI, label: "→" },      // Left to right  
-      { angle: 3 * Math.PI / 2, label: "↓" } // Top to bottom
-    ];
-    
-    for (const dir of directions) {
-      const distance = pixelRadius + 15;
-      const x = pixelCx + Math.cos(dir.angle) * distance;
-      const y = pixelCy + Math.sin(dir.angle) * distance;
+    // Draw fewer, smaller orbiting particles
+    const particleCount = 6;
+    for (let i = 0; i < particleCount; i++) {
+      const angle = (i / particleCount) * Math.PI * 2 + frame * 0.03;
+      const orbitRadius = radius * boxSize * 0.6 + 6 * Math.sin(frame * 0.05 + i);
+      const x = pixelCenterX + Math.cos(angle) * orbitRadius;
+      const y = pixelCenterY + Math.sin(angle) * orbitRadius;
       
-      // Pulsing arrows
-      const pulse = 0.5 + 0.5 * Math.sin(swirl * 2 + dir.angle);
-      ctx.globalAlpha = pulse * 0.8;
+      const particleAlpha = 0.3 + 0.3 * Math.sin(frame * 0.2 + i);
+      ctx.globalAlpha = particleAlpha;
       
-      ctx.font = "16px 'Press Start 2P', monospace";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "#ffffff";
-      ctx.fillText(dir.label, x, y);
+      // Small square particles
+      const particleSize = 2;
+      ctx.fillRect(x - particleSize / 2, y - particleSize / 2, particleSize, particleSize);
     }
     
     ctx.restore();

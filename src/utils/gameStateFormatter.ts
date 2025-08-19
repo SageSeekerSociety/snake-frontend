@@ -1,9 +1,10 @@
 import { GameRecordingFrame } from "../types/GameRecording";
-import { Position } from "../types/Position";
 import { VortexFieldApiData } from "../types/VortexField";
+import { FoodType } from "../config/GameConfig";
+import { EntityType } from "../types/EntityType";
 
 /**
- * 将游戏状态格式化为算法程序的输入格式
+ * Convert game state to algorithm program input format (same as sandboxService formatGameStateForAPI)
  */
 export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexData?: VortexFieldApiData): string {
   if (!frame || !frame.gameState) {
@@ -12,56 +13,83 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
 
   const { snakes, foodItems, obstacles } = frame.gameState;
   
-  // 格式化蛇的位置
-  const snakesData = snakes.map((snake, index) => {
-    // 只取蛇的身体位置，不包括其他属性
-    const body = snake.getBody() || [];
-    const isAlive = snake.isAlive(); // 默认为活着
-    
-    return {
-      index,
-      body: body.map((pos: Position) => ({ x: pos.x, y: pos.y })),
-      isAlive
-    };
-  });
-  
-  // 格式化食物位置
-  const foodData = foodItems.map(food => {
-    return {
-      position: { x: food.getPosition().x, y: food.getPosition().y },
-      value: food.getValue() || 1
-    };
-  });
-  
-  // 格式化障碍物位置
-  const obstacleData = obstacles.map(obstacle => {
-    return {
-      position: { x: obstacle.getPosition().x, y: obstacle.getPosition().y }
-    };
-  });
-  
-  // 创建最终的输入对象
-  const inputData = {
-    tick: frame.tick,
-    snakes: snakesData,
-    food: foodData,
-    obstacles: obstacleData,
-    vortexField: vortexData || {
-      stateCode: 0,
-      param1: 0,
-      param2: 0,
-      param3: 0,
-      param4: 0,
-      param5: 0
+  // Start with remaining ticks (use current tick for demonstration)
+  let input = `${frame.tick}\n`;
+
+  // Special items (food and obstacles)
+  const items = [...foodItems, ...obstacles];
+  input += `${items.length}\n`;
+
+  // Add food and obstacles
+  items.forEach((item) => {
+    const pos = item.position;
+    const x = Math.floor(pos.x / 20); // Convert to grid coordinates
+    const y = Math.floor(pos.y / 20);
+
+    let value;
+    if (item.entityType === EntityType.FOOD) {
+      const food = item as any;
+      // Convert different food types to API format
+      if (food.type === FoodType.GROWTH) {
+        value = -1; // Growth bean
+      } else if (food.type === FoodType.TRAP) {
+        value = -2; // Trap
+      } else {
+        value = Number(food.value); // Normal food
+      }
+    } else {
+      value = -4; // Wall
     }
-  };
-  
-  // 转换为JSON字符串并格式化
-  return JSON.stringify(inputData, null, 2);
+
+    // Note: Input format requires y,x order (coordinate system difference)
+    input += `${y} ${x} ${value}\n`;
+  });
+
+  // Alive players
+  const aliveSnakes = snakes.filter((snake) => snake.alive);
+  input += `${aliveSnakes.length}\n`;
+
+  // Add each snake's information
+  aliveSnakes.forEach((snake, index) => {
+    const length = snake.body.length;
+    const score = snake.score;
+    const dir = getDirectionValue(snake.direction);
+    const shieldCooldown = snake.shieldCooldown;
+    const shieldDuration = snake.shieldDuration;
+
+    const studentId = snake.metadata.username || snake.metadata.studentId || index;
+
+    input += `${studentId} ${length} ${score} ${dir} ${shieldCooldown} ${shieldDuration}\n`;
+
+    snake.body.forEach((segment) => {
+      const x = Math.floor(segment.x / 20);
+      const y = Math.floor(segment.y / 20);
+      input += `${y} ${x}\n`;
+    });
+  });
+
+  // Add vortex field information (use recorded data or provided override)
+  const vortexFieldToUse = vortexData || frame.gameState.vortexField;
+  if (vortexFieldToUse) {
+    input += `${vortexFieldToUse.stateCode} ${vortexFieldToUse.param1} ${vortexFieldToUse.param2} ${vortexFieldToUse.param3} ${vortexFieldToUse.param4} ${vortexFieldToUse.param5}\n`;
+  } else {
+    // Default inactive state
+    input += `0 0 0 0 0 0\n`;
+  }
+
+  return input;
 }
 
 /**
- * 将游戏状态复制到剪贴板
+ * Convert game direction to API number format
+ */
+const getDirectionValue = (direction: any): number => {
+  // Direction enum values: LEFT=0, UP=1, RIGHT=2, DOWN=3
+  return Number(direction) || 0;
+};
+
+/**
+ * Copy game state to clipboard
  */
 export async function copyGameStateToClipboard(frame: GameRecordingFrame): Promise<boolean> {
   try {
