@@ -8,8 +8,8 @@ const runtimeConfig = window.runtimeConfig || {
     import.meta.env.VITE_SANDBOX_URL || "http://localhost:8080/api/sandbox",
 };
 
-const API_URL = runtimeConfig.VITE_API_URL;
-const SANDBOX_URL = runtimeConfig.VITE_SANDBOX_URL;
+export const API_URL = runtimeConfig.VITE_API_URL;
+export const SANDBOX_URL = runtimeConfig.VITE_SANDBOX_URL;
 
 // 创建主API客户端实例
 export const apiClient = axios.create({

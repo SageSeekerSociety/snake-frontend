@@ -5,50 +5,52 @@
         <h1 class="auth-title">登录</h1>
         <div class="pixel-snake"></div>
       </div>
-      
+
       <form @submit.prevent="handleLogin" class="auth-form">
         <div class="form-group">
           <label for="username">学号：</label>
-          <input 
-            type="text" 
-            id="username" 
-            v-model="username" 
-            class="pixel-input" 
+          <input
+            type="text"
+            id="username"
+            v-model="username"
+            class="pixel-input"
             placeholder="请输入学号"
             required
           />
         </div>
-        
+
         <div class="form-group">
           <label for="password">密码：</label>
-          <input 
-            type="password" 
-            id="password" 
-            v-model="password" 
-            class="pixel-input" 
+          <input
+            type="password"
+            id="password"
+            v-model="password"
+            class="pixel-input"
             placeholder="请输入密码"
             required
           />
         </div>
-        
+
         <div v-if="error" class="error-message">{{ error }}</div>
-        
+
         <div class="auth-actions">
           <button type="submit" class="pixel-button" :disabled="isLoading">
-            {{ isLoading ? '登录中...' : '登录' }}
+            {{ isLoading ? "登录中..." : "登录" }}
           </button>
-          <router-link to="/register" class="auth-link">没有账号？注册</router-link>
+          <router-link to="/register" class="auth-link"
+            >没有账号？注册</router-link
+          >
         </div>
       </form>
-      
+
       <!-- OAuth 登录部分 -->
       <div class="oauth-section" v-if="oauthProviders.length > 0">
         <div class="oauth-divider">
           <span>或使用以下方式登录</span>
         </div>
         <div class="oauth-buttons">
-          <button 
-            v-for="provider in oauthProviders" 
+          <button
+            v-for="provider in oauthProviders"
             :key="provider.id"
             @click="handleOAuthLogin(provider)"
             class="oauth-button pixel-button"
@@ -63,16 +65,17 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, watchEffect, onMounted } from 'vue';
-import { useRouter } from 'vue-router';
-import { useAuth } from '../../stores/auth';
-import { authService } from '../../services/api';
+import { ref, computed, watchEffect, onMounted } from "vue";
+import { useRouter } from "vue-router";
+import { useAuth } from "../../stores/auth";
+import { authService } from "../../services/api";
+import { API_URL } from "../../services/httpClient";
 
 const router = useRouter();
 const { state, login } = useAuth();
 
-const username = ref('');
-const password = ref('');
+const username = ref("");
+const password = ref("");
 const error = computed(() => state.error);
 const isLoading = computed(() => state.loading);
 const isAuthenticated = computed(() => state.isAuthenticated);
@@ -81,8 +84,8 @@ const oauthProviders = ref<{ id: string; name: string }[]>([]);
 // 监听认证状态变化，自动跳转
 watchEffect(() => {
   if (isAuthenticated.value) {
-    console.log('检测到登录状态，跳转到主页');
-    router.push('/');
+    console.log("检测到登录状态，跳转到主页");
+    router.push("/");
   }
 });
 
@@ -94,14 +97,16 @@ const getOAuthProviders = async () => {
       oauthProviders.value = response.data;
     }
   } catch (err) {
-    console.error('获取OAuth提供商失败:', err);
+    console.error("获取OAuth提供商失败:", err);
   }
 };
 
 // 处理OAuth登录
 const handleOAuthLogin = (provider: { id: string; name: string }) => {
   const redirectUrl = `${window.location.origin}/oauth-callback`;
-  window.location.href = `${import.meta.env.VITE_API_URL}/users/auth/oauth/login/${provider.id}?redirect_uri=${encodeURIComponent(redirectUrl)}`;
+  window.location.href = `${API_URL}/users/auth/oauth/login/${
+    provider.id
+  }?redirect_uri=${encodeURIComponent(redirectUrl)}`;
 };
 
 // 处理常规登录
@@ -109,14 +114,14 @@ const handleLogin = async () => {
   if (!username.value || !password.value) {
     return;
   }
-  
-  console.log('开始登录请求');
+
+  console.log("开始登录请求");
   const success = await login(username.value, password.value);
-  console.log('登录请求完成, 成功状态:', success);
-  
+  console.log("登录请求完成, 成功状态:", success);
+
   if (success) {
-    console.log('登录成功，跳转到主页');
-    router.push('/');
+    console.log("登录成功，跳转到主页");
+    router.push("/");
   }
 };
 
@@ -188,7 +193,7 @@ onMounted(() => {
   border: 3px solid var(--border-color);
   color: var(--text-color);
   padding: 10px;
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 12px;
   width: 100%;
   border-radius: 4px;
@@ -205,7 +210,7 @@ onMounted(() => {
   border: none;
   padding: 12px 20px;
   color: black;
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 12px;
   cursor: pointer;
   border-radius: 4px;
@@ -274,7 +279,7 @@ onMounted(() => {
 
 .oauth-divider::before,
 .oauth-divider::after {
-  content: '';
+  content: "";
   flex: 1;
   height: 2px;
   background-color: var(--border-color);
@@ -306,4 +311,4 @@ onMounted(() => {
 .oauth-ruc:hover:not(:disabled) {
   background-color: #c0392b;
 }
-</style> 
+</style>
