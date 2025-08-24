@@ -48,109 +48,38 @@ export class EntityFactory {
     const snakes: Snake[] = [];
     const radius = 10 * this.boxSize; // Example radius
 
-    // Predefined colors - expanded to support up to 20 snakes
+    // Predefined high-contrast palette: 24+ distinct colors
+    // First color is reserved for the primary/player snake
     const snakeColors = [
       GameConfig.COLORS.PLAYER,
-      "purple",
-      "#FF8800",
-      "#FF3366",
-      "#33CCFF",
-      "#FFCC00",
-      "#66FF66",
-      "#CC66FF",
-      "#FF6600",
-      "#00CCCC",
-      "#9966FF",
-      "#FFFF66",
-      "#FF99CC",
-      "#99CCFF",
-      "#FF6633",
-      "#00FF99",
-      // Additional colors with good contrast
-      "#FF5733", // Coral
-      "#C70039", // Crimson
-      "#900C3F", // Maroon
-      "#581845", // Plum
-      "#FFC300", // Amber
-      "#DAF7A6", // Light Green
-      "#FFC0CB", // Pink
-      "#7D3C98", // Dark Purple
+      '#e6194B', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#46f0f0',
+      '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9A6324',
+      '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075',
+      '#808080', '#ffe119', '#469990', '#dcbeff', '#a9a9a9'
     ];
 
-    if (selectedUsers && selectedUsers.length > 0) {
-      // Create snakes for selected users
-      const angleStep = 360 / selectedUsers.length;
-      selectedUsers.forEach((user, index) => {
-        const angle = index * angleStep;
-        const colorIndex = index % snakeColors.length;
-        snakes.push(
-          this.createApiControlledSnake(
-            radius,
-            angle,
-            snakeColors[colorIndex],
-            clock,
-            coordinator,
-            gameSessionId,
-            user,
-          )
-        );
-      });
-    } else {
-      // Create default snake lineup (example: 1 API, 1 Advanced, 1 Chaser pair, rest simple/greedy)
-      const totalSnakeCount = 20; // Support up to 20 snakes
-      // We've already defined enough colors, but just in case we need more
-      while (snakeColors.length < totalSnakeCount) {
-        // Generate a random color with good brightness and saturation
-        const h = Math.floor(Math.random() * 360); // Hue (0-360)
-        const s = Math.floor(Math.random() * 30) + 70; // Saturation (70-100%)
-        const l = Math.floor(Math.random() * 30) + 40; // Lightness (40-70%)
-        snakeColors.push(`hsl(${h}, ${s}%, ${l}%)`);
-      }
-
-      // 1. Advanced AI
-      if (snakes.length < totalSnakeCount) {
-        snakes.push(this.createAdvancedAISnake(radius, 60, snakeColors[1]));
-      }
-
-      // 2. Chaser Pair (Example)
-      if (snakes.length + 1 < totalSnakeCount) {
-        const [chaser, target] = this.createBalancedChasingSnakes(
-          radius,
-          120,
-          snakeColors[2],
-          snakeColors[3]
-        );
-        snakes.push(chaser, target);
-      }
-
-      // 3. Fill remaining with Simple/Greedy AI
-      const aiAlgorithms = [simpleAIAlgorithm, greedyAIAlgorithm];
-      const usedAngles = snakes
-        .map((_, i) => [0, 60, 120, 180][i] ?? -1)
-        .filter((a) => a >= 0); // Rough angles used
-      let currentAngle = 210; // Start filling from another angle
-      const angleIncrement = 30;
-
-      while (snakes.length < totalSnakeCount) {
-        // Basic angle avoidance
-        while (usedAngles.some((ua) => Math.abs(ua - currentAngle) < 15)) {
-          currentAngle = (currentAngle + angleIncrement) % 360;
-        }
-        usedAngles.push(currentAngle);
-
-        const colorIndex = snakes.length % snakeColors.length;
-        const algorithm = aiAlgorithms[snakes.length % aiAlgorithms.length];
-        snakes.push(
-          this.createAiControlledSnake(
-            radius,
-            currentAngle,
-            snakeColors[colorIndex],
-            algorithm
-          )
-        );
-        currentAngle = (currentAngle + angleIncrement) % 360;
-      }
+    if (!selectedUsers || selectedUsers.length === 0) {
+      throw new Error("No users selected");
     }
+
+    // Create snakes for selected users
+    const angleStep = 360 / selectedUsers.length;
+    selectedUsers.forEach((user, index) => {
+      const angle = index * angleStep;
+      const colorIndex = index % snakeColors.length;
+      snakes.push(
+        this.createApiControlledSnake(
+          radius,
+          angle,
+          snakeColors[colorIndex],
+          clock,
+          coordinator,
+          gameSessionId,
+          user,
+        )
+      );
+    });
+
     return snakes;
   }
 
