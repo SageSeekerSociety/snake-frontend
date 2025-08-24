@@ -6,7 +6,7 @@
         <div class="panel-title">计分板</div>
       </div>
       <div class="score-list">
-        <div v-for="snake in sortedSnakes" :key="snake.index"
+        <div v-for="snake in sortedSnakes" :key="snake.snake.getId()"
           class="score-item"
           :class="{ 'player-dead': !snake.snake.isAlive() }">
           <div class="score-color" :style="{ backgroundColor: snake.snake.getColor() }"></div>

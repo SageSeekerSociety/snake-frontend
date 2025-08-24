@@ -26,6 +26,8 @@ export interface SnakeDecisionStrategy {
 }
 
 export class Snake extends Entity {
+  private static nextId = 1;
+  private readonly id: number;
   private body: Position[];
   private lastBody: Position[];
   private direction: Direction;
@@ -61,6 +63,7 @@ export class Snake extends Entity {
     metadata: SnakeMetadata = {}
   ) {
     super(position, size);
+    this.id = Snake.nextId++;
     this.body = this.initializeBody(position, direction);
     this.lastBody = [...this.body];
     this.direction = direction;
@@ -382,6 +385,11 @@ export class Snake extends Entity {
 
   getColor(): string {
     return this.color;
+  }
+
+  // Unique, stable identifier for UI keying and tracking
+  getId(): number {
+    return this.id;
   }
 
   getShieldCooldown(): number {
