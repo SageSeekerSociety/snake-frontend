@@ -37,6 +37,8 @@ export class SafeZoneManager {
   private shrinkDuration?: number;
   private targetBounds?: SafeZoneBounds;
   private initialBoundsForCurrentShrink?: SafeZoneBounds;
+  private shrinkAmountX?: number;
+  private shrinkAmountY?: number;
 
   constructor() {
     this.enabled = GameConfig.SAFE_ZONE.ENABLED;
@@ -190,18 +192,21 @@ export class SafeZoneManager {
     // Calculate how much to shrink on each side
     const totalShrinkX = currentWidth - targetWidth;
     const totalShrinkY = currentHeight - targetHeight;
-    
+
     // Ensure RELATIVE symmetry: left=right, top=bottom
     // Split evenly, but handle odd numbers by giving extra to one side consistently
-    
+
     // For X-axis (left-right symmetry)
     const shrinkLeft = Math.floor(totalShrinkX / 2);
     const shrinkRight = totalShrinkX - shrinkLeft; // This ensures left + right = totalShrinkX exactly
-    
+
     // For Y-axis (top-bottom symmetry)  
     const shrinkTop = Math.floor(totalShrinkY / 2);
     const shrinkBottom = totalShrinkY - shrinkTop; // This ensures top + bottom = totalShrinkY exactly
-    
+
+    const shrinkXPerSide = totalShrinkX / 2;
+    const shrinkYPerSide = totalShrinkY / 2;
+
     // Apply shrinking with relative symmetry
     this.targetBounds = {
       xMin: this.currentBounds.xMin + shrinkLeft,
@@ -209,7 +214,10 @@ export class SafeZoneManager {
       yMin: this.currentBounds.yMin + shrinkTop,
       yMax: this.currentBounds.yMax - shrinkBottom,
     };
-    
+
+    this.shrinkAmountX = shrinkXPerSide;
+    this.shrinkAmountY = shrinkYPerSide;
+
     // Verify the result has the expected size
     const actualWidth = this.targetBounds.xMax - this.targetBounds.xMin + 1;
     const actualHeight = this.targetBounds.yMax - this.targetBounds.yMin + 1;
@@ -217,7 +225,7 @@ export class SafeZoneManager {
     console.log(`[SafeZone] Started shrinking from ${currentWidth}x${currentHeight} to ${targetWidth}x${targetHeight} (actual: ${actualWidth}x${actualHeight})`);
     console.log(`[SafeZone] Perfect ring shrinking: L=${shrinkLeft}, R=${shrinkRight}, T=${shrinkTop}, B=${shrinkBottom}`);
     console.log(`[SafeZone] Target bounds: (${this.targetBounds.xMin},${this.targetBounds.yMin}) to (${this.targetBounds.xMax},${this.targetBounds.yMax})`);
-    
+
     // Emit event for UI notification
     eventBus.emit(GameEventType.UI_NOTIFICATION, "Safe zone is shrinking!");
   }
@@ -226,7 +234,7 @@ export class SafeZoneManager {
    * Updates shrinking animation
    */
   private updateShrinking(currentTick: number): void {
-    if (!this.shrinkStartTick || !this.shrinkDuration || !this.targetBounds || !this.initialBoundsForCurrentShrink) return;
+    if (!this.shrinkStartTick || !this.shrinkDuration || !this.targetBounds || !this.initialBoundsForCurrentShrink || this.shrinkAmountX === undefined || this.shrinkAmountY === undefined) return;
 
     const elapsed = currentTick - this.shrinkStartTick;
     const progress = Math.min(elapsed / this.shrinkDuration, 1.0);
@@ -242,11 +250,21 @@ export class SafeZoneManager {
       console.log(`[SafeZone] Shrinking complete. New bounds: (${this.currentBounds.xMin},${this.currentBounds.yMin}) to (${this.currentBounds.xMax},${this.currentBounds.yMax})`);
     } else {
       // Interpolate bounds from initial bounds of this shrink to target bounds
+      // 1. 根据进度计算当前应该收缩多少（可以是小数）
+      const currentShrinkX = this.shrinkAmountX * progress;
+      const currentShrinkY = this.shrinkAmountY * progress;
+
+      // 2. 将要收缩的量取整。用 round 更平滑，也可以用 floor。
+      // 这确保了在任何一帧，左右两边增加/减少的整数格数完全一样。
+      const integerShrinkX = Math.round(currentShrinkX);
+      const integerShrinkY = Math.round(currentShrinkY);
+
+      // 3. 将整数收缩量应用到【本次收缩的初始边界】上，而不是上一帧的边界
       this.currentBounds = {
-        xMin: Math.floor(this.initialBoundsForCurrentShrink.xMin + (this.targetBounds.xMin - this.initialBoundsForCurrentShrink.xMin) * progress),
-        xMax: Math.floor(this.initialBoundsForCurrentShrink.xMax + (this.targetBounds.xMax - this.initialBoundsForCurrentShrink.xMax) * progress),
-        yMin: Math.floor(this.initialBoundsForCurrentShrink.yMin + (this.targetBounds.yMin - this.initialBoundsForCurrentShrink.yMin) * progress),
-        yMax: Math.floor(this.initialBoundsForCurrentShrink.yMax + (this.targetBounds.yMax - this.initialBoundsForCurrentShrink.yMax) * progress),
+        xMin: this.initialBoundsForCurrentShrink.xMin + integerShrinkX,
+        xMax: this.initialBoundsForCurrentShrink.xMax - integerShrinkX,
+        yMin: this.initialBoundsForCurrentShrink.yMin + integerShrinkY,
+        yMax: this.initialBoundsForCurrentShrink.yMax - integerShrinkY,
       };
     }
   }
@@ -257,7 +275,7 @@ export class SafeZoneManager {
    */
   private checkForWarnings(currentTick: number): void {
     const nextShrinkTick = this.getNextShrinkTick();
-    
+
     if (nextShrinkTick) {
       const ticksUntilShrink = nextShrinkTick - currentTick;
       this.isWarning = ticksUntilShrink <= GameConfig.SAFE_ZONE.WARNING_TICKS_BEFORE_SHRINK && ticksUntilShrink > 0;
