@@ -1,5 +1,6 @@
 import { Snake } from "../entities/Snake";
-import { Food } from "../entities/Food";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
 import { Position } from "../types/Position";
 import { GameConfig } from "../config/GameConfig";
 import { User } from "../types/User";
@@ -14,8 +15,11 @@ import { CollisionDetector, CollisionResult } from "../core/CollisionDetector";
 import { InputHandler } from "./InputHandler";
 import { DecisionRequestCoordinator } from "../core/DecisionRequestCoordinator";
 import { VortexFieldManager } from "./VortexFieldManager";
+import { TreasureSystem } from "./TreasureSystem";
+import { SafeZoneManager } from "./SafeZoneManager";
 import { gameRecordingService } from "../services/gameRecordingService";
 import { v4 as uuidv4 } from 'uuid';
+import { Obstacle } from "../entities/Obstacle";
 
 /**
  * Orchestrates the overall game flow, managing different subsystems.
@@ -31,6 +35,8 @@ export class GameManager {
   private inputHandler: InputHandler;
   private decisionCoordinator: DecisionRequestCoordinator;
   private vortexFieldManager: VortexFieldManager;
+  private treasureSystem: TreasureSystem;
+  private safeZoneManager: SafeZoneManager;
 
   private gameInitialized: boolean = false;
   private gameRunning: boolean = false; // Use gameClock.isRunning maybe?
@@ -67,15 +73,18 @@ export class GameManager {
     // Set EntityManager reference in VortexFieldManager after EntityManager is created
     this.vortexFieldManager.setEntityQuery(this.entityManager);
     
+    this.safeZoneManager = new SafeZoneManager();
     this.foodGenerator = new FoodGenerator(
       this.entityManager,
       this.entityFactory,
-      this.vortexFieldManager
+      this.vortexFieldManager,
+      this.safeZoneManager
     );
     this.collisionDetector = new CollisionDetector(this.vortexFieldManager);
     this.gameClock = new GameClock(GameConfig.TOTAL_TICKS); // Get total ticks from config
     this.inputHandler = new InputHandler(canvas);
     this.decisionCoordinator = new DecisionRequestCoordinator();
+    this.treasureSystem = new TreasureSystem(this.entityManager);
 
     // Initialize recording service if enabled
     if (this.recordingEnabled) {
@@ -98,6 +107,9 @@ export class GameManager {
   private boundStartGame!: () => void;
   private boundHandleGameOver!: () => void;
   private boundCheckGameOverCondition!: (snake: Snake) => void;
+  private boundHandleTreasureSpawned!: (data: { treasure: TreasureChest, keys: Key[] }) => void;
+  private boundHandleKeyDropped!: (data: { key: Key, snake: Snake }) => void;
+  private boundHandleKeyRemoved!: (data: { key: Key }) => void;
 
   /**
    * Sets up listeners for events that GameManager needs to react to directly.
@@ -107,6 +119,10 @@ export class GameManager {
     this.boundStartGame = this.startGame.bind(this);
     this.boundHandleGameOver = this.handleGameOver.bind(this);
     this.boundCheckGameOverCondition = this.checkGameOverCondition.bind(this);
+    this.boundHandleTreasureSpawned = this.handleTreasureSpawned.bind(this);
+    this.boundHandleKeyDropped = this.handleKeyDropped.bind(this);
+    this.boundHandleKeyRemoved = this.handleKeyRemoved.bind(this);
+    
     eventBus.on(GameEventType.GAME_START_REQUESTED, this.boundStartGame);
     eventBus.on(GameEventType.GAME_OVER, this.boundHandleGameOver);
     // Listen for cleanup completion to check game over condition again
@@ -114,6 +130,11 @@ export class GameManager {
       GameEventType.SNAKE_DEATH_ANIMATION_COMPLETE,
       this.boundCheckGameOverCondition
     );
+    
+    // Treasure system event handlers
+    eventBus.on(GameEventType.TREASURE_SPAWNED, this.boundHandleTreasureSpawned);
+    eventBus.on(GameEventType.KEY_DROPPED, this.boundHandleKeyDropped);
+    eventBus.on(GameEventType.KEY_REMOVED, this.boundHandleKeyRemoved);
   }
 
   /**
@@ -124,6 +145,8 @@ export class GameManager {
     console.log("Preparing new game...");
     this.gameClock.stop(); // Ensure clock is stopped
     this.entityManager.clear(); // Clear entities and spatial grid
+    this.treasureSystem.reset(); // Reset treasure system state
+    this.safeZoneManager.reset(); // Reset safe zone to initial state
     this.gameSessionId = uuidv4();
     console.log(`New game session started with ID: ${this.gameSessionId}`);
 
@@ -135,7 +158,8 @@ export class GameManager {
       this.decisionCoordinator,
       this.gameSessionId
     );
-    const initialObstacles = this.entityFactory.createCircularWall(6); // Example wall
+    // const initialObstacles = this.entityFactory.createCircularWall(6); // Example wall
+    const initialObstacles: Obstacle[] = []; // Example wall
 
     // First add obstacles to the entity manager so food generation can check for them
     this.entityManager.initializeEntities([], initialObstacles, []);
@@ -239,6 +263,12 @@ export class GameManager {
     // 0. Update Vortex Field State
     this.vortexFieldManager.update(currentTick);
 
+    // 0.25. Update Safe Zone System
+    this.safeZoneManager.update(currentTick);
+
+    // 0.5. Update Treasure System
+    this.treasureSystem.update(currentTick);
+
     const gameState = this.entityManager.getGameState(); // Get current state for decisions
 
     // 1. Gather Decisions (Asynchronous)
@@ -256,14 +286,14 @@ export class GameManager {
       this.entityManager
     );
 
-    // 4. Handle Phase 1 Collision Results
-    this.handleCollisions(collisionResults);
+    // 4. Handle Phase 1 Collision Results - but allow visual collision first
+    this.handleCollisionsWithDelay(collisionResults);
 
-    // 5. Phase 2: Apply Vortex Pull (if active)
+    // 5. Phase 2: Apply Vortex Pull (if active) - only to snakes not in death animation
     this.applyVortexPull();
 
-    // 6. Phase 2 Collision Detection
-    liveSnakes = this.entityManager.getLiveSnakes();
+    // 6. Phase 2 Collision Detection - only for snakes not dying
+    liveSnakes = this.entityManager.getLiveSnakes().filter(snake => !snake.isDyingAnimation());
     allSnakes = this.entityManager.getAllSnakes();
     const phase2CollisionResults = this.collisionDetector.detectCollisions(
       liveSnakes,
@@ -272,7 +302,10 @@ export class GameManager {
     );
 
     // 7. Handle Phase 2 Collision Results
-    this.handleCollisions(phase2CollisionResults);
+    this.handleCollisionsWithDelay(phase2CollisionResults);
+
+    // 7.5. Check Safe Zone Violations
+    this.checkSafeZoneViolations();
 
     // 8. Generate Periodic Food (with vortex field priority)
     const newFood = this.foodGenerator.generatePeriodicFood(currentTick);
@@ -289,6 +322,7 @@ export class GameManager {
     // Note: Rendering happens in a separate loop (renderLoop)
     // Game over condition is checked by GameClock (ticks run out)
     // or after snake death cleanup
+    // Treasure system interactions are handled via collision detection
   }
 
   /**
@@ -307,10 +341,28 @@ export class GameManager {
   }
 
   /**
+   * Checks if any snakes are outside the safe zone and kills them
+   */
+  private checkSafeZoneViolations(): void {
+    const liveSnakes = this.entityManager.getLiveSnakes().filter(snake => !snake.isDyingAnimation());
+    
+    for (const snake of liveSnakes) {
+      const headPosition = snake.getBody()[0];
+      
+      if (!this.safeZoneManager.isPositionSafe(headPosition)) {
+        const snakeName = snake.getMetadata()?.name || `Snake ${this.entityManager.getAllSnakes().indexOf(snake) + 1}`;
+        console.log(`[SafeZone] ${snakeName} violated safe zone at (${Math.floor(headPosition.x / 20)}, ${Math.floor(headPosition.y / 20)})`);
+        this.startDeathAnimation(snake, "left the safe zone");
+      }
+    }
+  }
+
+  /**
    * Applies vortex pull to snakes in the vortex field (Phase 2 movement)
    */
   private applyVortexPull(): void {
-    const liveSnakes = this.entityManager.getLiveSnakes();
+    // Only apply vortex pull to snakes that are alive and not in death animation
+    const liveSnakes = this.entityManager.getLiveSnakes().filter(snake => !snake.isDyingAnimation());
     
     for (const snake of liveSnakes) {
       const headPosition = snake.getBody()[0];
@@ -367,114 +419,165 @@ export class GameManager {
   }
 
   /**
-   * Processes the collision results detected for the current tick.
+   * Processes collision results with visual delay for better user experience.
+   * Allows players to see the collision moment before death animation starts.
    */
-  private handleCollisions(results: CollisionResult[]): void {
-    const foodCollisions = new Map<Snake, Food>(); // Track food eaten per snake per tick
-
+  private handleCollisionsWithDelay(results: CollisionResult[]): void {
+    // For fatal collisions, start death animation immediately (but keep snake alive during animation)
+    // For non-fatal collisions (food, key, treasure), handle immediately
     for (const result of results) {
-      switch (result.type) {
-        case "wall":
-          this.entityManager.killSnake(result.snake, `hit wall`);
-          break;
-        case "obstacle":
-          this.entityManager.killSnake(result.snake, `hit obstacle`);
-          break;
-        case "snake":
-          // 蛇碰撞（头部或身体）
-          if (result.collidedWith instanceof Snake) {
-            const collidedSnake = result.collidedWith as Snake;
-            const collidedSnakeColor = collidedSnake.getColor();
-            const collidedSnakeName =
-              collidedSnake.getMetadata()?.name ||
-              `Snake ${
-                this.entityManager.getAllSnakes().indexOf(collidedSnake) + 1
-              }`;
-            const coloredCollidedSnakeName = `<span style="color: ${collidedSnakeColor}">${collidedSnakeName}</span>`;
+      if (result.type === "food" || result.type === "key" || result.type === "treasure_chest") {
+        // Handle non-fatal collisions immediately - no delay needed
+        this.handleSingleCollision(result);
+      } else {
+        // For fatal collisions, start death animation immediately
+        // This allows the visual collision to be seen before the snake disappears
+        this.handleFatalCollisionWithAnimation(result);
+      }
+    }
+  }
 
-            // 检查是否是蛇头对蛇头碰撞
-            const isHeadCollision =
-              collidedSnake.getBody()[0]?.x === result.position.x &&
-              collidedSnake.getBody()[0]?.y === result.position.y;
 
-            if (isHeadCollision) {
-              // 蛇头对蛇头碰撞，考虑护盾
-              const snakeHasShield = result.snake.isShieldActive();
-              const collidedSnakeHasShield = collidedSnake.isShieldActive();
-              
-              if (snakeHasShield && collidedSnakeHasShield) {
-                // 两条蛇都有护盾 -> 都免疫死亡
-                console.log(`[SHIELD] Both snakes have shields, both immune to head collision death`);
-                // 不杀死任何一条蛇
-              } else if (snakeHasShield && !collidedSnakeHasShield) {
-                // 只有result.snake有护盾 -> 杀死collidedSnake
-                const snakeName =
-                  result.snake.getMetadata()?.name ||
-                  `Snake ${
-                    this.entityManager.getAllSnakes().indexOf(result.snake) + 1
-                  }`;
-                const snakeColor = result.snake.getColor();
-                const coloredSnakeName = `<span style="color: ${snakeColor}">${snakeName}</span>`;
-                this.entityManager.killSnake(
-                  collidedSnake,
-                  `hit by shielded ${coloredSnakeName}`
-                );
-              } else if (!snakeHasShield && collidedSnakeHasShield) {
-                // 只有collidedSnake有护盾 -> 杀死result.snake
-                this.entityManager.killSnake(
-                  result.snake,
-                  `hit ${coloredCollidedSnakeName}`
-                );
-              } else {
-                // 两条蛇都没有护盾 -> 两条蛇都死亡
-                const snakeName =
-                  result.snake.getMetadata()?.name ||
-                  `Snake ${
-                    this.entityManager.getAllSnakes().indexOf(result.snake) + 1
-                  }`;
-                const snakeColor = result.snake.getColor();
-                const coloredSnakeName = `<span style="color: ${snakeColor}">${snakeName}</span>`;
+  /**
+   * Handles a fatal collision by starting death animation
+   */
+  private handleFatalCollisionWithAnimation(result: CollisionResult): void {
+    // Don't kill snakes that are already dying
+    if (!result.snake.isAlive() || result.snake.isDyingAnimation()) {
+      return;
+    }
 
-                this.entityManager.killSnake(
-                  result.snake,
-                  `hit ${coloredCollidedSnakeName}`
-                );
-                this.entityManager.killSnake(
-                  collidedSnake,
-                  `hit ${coloredSnakeName}`
-                );
-              }
+    const snakeIndex = this.entityManager.getAllSnakes().indexOf(result.snake) + 1;
+    const snakeName = result.snake.getMetadata()?.name || `Snake ${snakeIndex}`;
+
+    let deathReason = "";
+    
+    switch (result.type) {
+      case "wall":
+        deathReason = "hit wall";
+        break;
+      case "obstacle":
+        deathReason = "hit obstacle";
+        break;
+      case "snake":
+        if (result.collidedWith instanceof Snake) {
+          const collidedSnake = result.collidedWith as Snake;
+          const collidedSnakeColor = collidedSnake.getColor();
+          const collidedSnakeName =
+            collidedSnake.getMetadata()?.name ||
+            `Snake ${this.entityManager.getAllSnakes().indexOf(collidedSnake) + 1}`;
+          const coloredCollidedSnakeName = `<span style="color: ${collidedSnakeColor}">${collidedSnakeName}</span>`;
+
+          // Check for head-to-head collision
+          const isHeadCollision =
+            collidedSnake.getBody()[0]?.x === result.position.x &&
+            collidedSnake.getBody()[0]?.y === result.position.y;
+
+          if (isHeadCollision) {
+            // Handle shield logic for head-to-head collisions
+            const snakeHasShield = result.snake.isShieldActive();
+            const collidedSnakeHasShield = collidedSnake.isShieldActive();
+            
+            if (snakeHasShield && collidedSnakeHasShield) {
+              // Both have shields, no death
+              return;
+            } else if (snakeHasShield && !collidedSnakeHasShield) {
+              // Only result.snake has shield, kill the other snake
+              deathReason = `hit by shielded ${result.snake.getMetadata()?.name || snakeName}`;
+              this.startDeathAnimation(collidedSnake, deathReason);
+              return;
+            } else if (!snakeHasShield && collidedSnakeHasShield) {
+              // Only collidedSnake has shield, kill result.snake
+              deathReason = `hit ${coloredCollidedSnakeName}`;
             } else {
-              // 蛇头撞到蛇身体，已经在 CollisionDetector 中处理了护盾逻辑
-              this.entityManager.killSnake(
-                result.snake,
-                `hit ${coloredCollidedSnakeName}`
-              );
+              // Neither has shields, both die
+              deathReason = `hit ${coloredCollidedSnakeName}`;
+              const otherReason = `hit ${result.snake.getMetadata()?.name || snakeName}`;
+              this.startDeathAnimation(collidedSnake, otherReason);
             }
           } else {
-            // 如果 collidedWith 不是 Snake 对象，使用通用消息
-            this.entityManager.killSnake(result.snake, `hit snake`);
+            deathReason = `hit ${coloredCollidedSnakeName}`;
           }
-          break;
-        case "food":
-          // Find the actual food object based on position
-          // This is inefficient, ideally CollisionDetector provides the Food object
-          const foodPos = result.collidedWith as Position;
-          const eatenFood = this.entityManager
-            .getAllFoodItems()
-            .find(
-              (f) =>
-                f.getPosition().x === foodPos.x &&
-                f.getPosition().y === foodPos.y
-            );
-          if (eatenFood) {
-            // Avoid processing the same food collision multiple times if somehow detected twice
-            if (!foodCollisions.has(result.snake)) {
-              foodCollisions.set(result.snake, eatenFood);
-              this.entityManager.handleFoodEaten(result.snake, eatenFood);
-            }
-          }
-          break;
+        } else {
+          deathReason = "hit snake";
+        }
+        break;
+      default:
+        deathReason = "unknown collision";
+    }
+
+    this.startDeathAnimation(result.snake, deathReason);
+  }
+
+  /**
+   * Starts the death animation for a snake
+   */
+  private startDeathAnimation(snake: Snake, reason: string): void {
+    if (!snake.isAlive() || snake.isDyingAnimation()) {
+      return;
+    }
+
+    console.log(`[DEATH] Starting death animation for ${snake.getMetadata()?.name}: ${reason}`);
+    
+    // Handle key drop if snake has one
+    this.treasureSystem.handleSnakeDeath(snake);
+
+    // Start the death animation (Snake.die() method)
+    snake.die(reason);
+
+    // Emit notification with color information
+    const snakeColor = snake.getColor();
+    const snakeName = snake.getMetadata()?.name || `Snake ${this.entityManager.getAllSnakes().indexOf(snake) + 1}`;
+    const coloredSnakeName = `<span style="color: ${snakeColor}">${snakeName}</span>`;
+    eventBus.emit(
+      GameEventType.UI_NOTIFICATION,
+      `${coloredSnakeName} ${reason}`
+    );
+  }
+
+  /**
+   * Handles a single collision (food, key, treasure)
+   */
+  private handleSingleCollision(result: CollisionResult): void {
+    if (result.type === "food") {
+      // Find the actual food object based on position
+      const foodPos = result.collidedWith as Position;
+      const eatenFood = this.entityManager
+        .getAllFoodItems()
+        .find(
+          (f) =>
+            f.getPosition().x === foodPos.x &&
+            f.getPosition().y === foodPos.y
+        );
+      if (eatenFood) {
+        this.entityManager.handleFoodEaten(result.snake, eatenFood);
+      }
+    } else if (result.type === "key") {
+      // Handle key pickup
+      const keyPos = result.collidedWith as Position;
+      const key = this.entityManager
+        .getAllKeys()
+        .find(
+          (k) =>
+            k.getPosition().x === keyPos.x &&
+            k.getPosition().y === keyPos.y
+        );
+      if (key && this.treasureSystem.handleKeyPickup(result.snake, key)) {
+        this.entityManager.removeKey(key);
+      }
+    } else if (result.type === "treasure_chest") {
+      // Handle treasure opening attempt
+      const treasurePos = result.collidedWith as Position;
+      const treasure = this.entityManager
+        .getAllTreasureChests()
+        .find(
+          (t) =>
+            t.getPosition().x === treasurePos.x &&
+            t.getPosition().y === treasurePos.y
+        );
+      if (treasure && this.treasureSystem.handleTreasureOpening(result.snake, treasure)) {
+        // Treasure was successfully opened - it will be handled by the treasure system
+        // No need to remove it here as it might need to stay for visual feedback
       }
     }
   }
@@ -636,6 +739,8 @@ export class GameManager {
     // Render the current state
     const renderables = [
       ...this.entityManager.getAllFoodItems(),
+      ...this.entityManager.getAllTreasureChests(),
+      ...this.entityManager.getAllKeys(),
       ...this.entityManager.getAllSnakes(),
       // Obstacles are pre-rendered, but could be included if dynamic
     ];
@@ -644,7 +749,10 @@ export class GameManager {
     const vortexStatus = this.vortexFieldManager.getStatus();
     const vortexState = this.createVortexRenderState(vortexStatus);
     
-    this.canvasManager.render(renderables, vortexState, timestamp); // Pass vortex state and timestamp
+    // Get current safe zone state for rendering
+    const safeZoneStatus = this.safeZoneManager.getStatus();
+    
+    this.canvasManager.render(renderables, vortexState, timestamp, safeZoneStatus); // Pass both states
 
     // Display appropriate overlays
     if (!this.gameRunning && this.gameInitialized) {
@@ -657,6 +765,47 @@ export class GameManager {
     this.animationId = requestAnimationFrame(this.renderLoop.bind(this));
   }
   private lastRenderTime: number = 0; // Helper for renderLoop deltaTime
+
+  // --- Treasure System Event Handlers ---
+  
+  /**
+   * Handles treasure and keys being spawned by the treasure system
+   */
+  private handleTreasureSpawned(data: { treasure: TreasureChest, keys: Key[] }): void {
+    // Add treasure to entity manager
+    if (data.treasure) {
+      this.entityManager.addTreasureChest(data.treasure);
+    }
+    
+    // Add keys to entity manager
+    if (data.keys && Array.isArray(data.keys)) {
+      data.keys.forEach(key => {
+        this.entityManager.addKey(key);
+      });
+    }
+    
+    console.log(`[GameManager] Added treasure and ${data.keys?.length || 0} keys to game`);
+  }
+
+  /**
+   * Handles a key being dropped (either by timeout or death)
+   */
+  private handleKeyDropped(data: { key: Key, snake: Snake }): void {
+    if (data.key) {
+      this.entityManager.addKey(data.key);
+      console.log(`[GameManager] Key dropped by ${data.snake?.getMetadata()?.name || 'unknown snake'}`);
+    }
+  }
+
+  /**
+   * Handles a key being removed from the game
+   */
+  private handleKeyRemoved(data: { key: Key }): void {
+    if (data.key) {
+      this.entityManager.removeKey(data.key);
+      console.log(`[GameManager] Key removed from game`);
+    }
+  }
 
   // --- Cleanup ---
   dispose(): void {
@@ -676,6 +825,8 @@ export class GameManager {
     this.entityManager.dispose();
     this.decisionCoordinator.cleanup();
     this.vortexFieldManager.dispose();
+    this.treasureSystem.dispose();
+    this.safeZoneManager.dispose();
 
     // Unsubscribe from EventBus listeners
     eventBus.off(GameEventType.GAME_START_REQUESTED, this.boundStartGame);
@@ -684,6 +835,11 @@ export class GameManager {
       GameEventType.SNAKE_DEATH_ANIMATION_COMPLETE,
       this.boundCheckGameOverCondition
     );
+    
+    // Treasure system event cleanup
+    eventBus.off(GameEventType.TREASURE_SPAWNED, this.boundHandleTreasureSpawned);
+    eventBus.off(GameEventType.KEY_DROPPED, this.boundHandleKeyDropped);
+    eventBus.off(GameEventType.KEY_REMOVED, this.boundHandleKeyRemoved);
 
     // Reset state
     this.gameInitialized = false;

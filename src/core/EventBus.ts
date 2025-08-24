@@ -29,6 +29,12 @@ export enum GameEventType {
   VORTEX_FIELD_ACTIVATED = "vortex:field_activated",
   VORTEX_FIELD_DEACTIVATED = "vortex:field_deactivated",
   VORTEX_FIELD_COOLDOWN_ENDED = "vortex:field_cooldown_ended",
+  // 宝箱钥匙系统事件
+  TREASURE_SPAWNED = "treasure:spawned",
+  TREASURE_OPENED = "treasure:opened",
+  KEY_PICKED_UP = "treasure:key_picked_up",
+  KEY_DROPPED = "treasure:key_dropped",
+  KEY_REMOVED = "treasure:key_removed",
 }
 
 // Callback function type

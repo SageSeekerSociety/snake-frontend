@@ -8,9 +8,9 @@ import { VortexFieldManager } from "../managers/VortexFieldManager";
 import { VortexZoneType } from "../types/VortexField";
 
 export interface CollisionResult {
-  type: "wall" | "obstacle" | "food" | "snake";
+  type: "wall" | "obstacle" | "food" | "snake" | "treasure_chest" | "key";
   snake: Snake; // The snake that collided
-  collidedWith?: Food | Obstacle | Snake | Position; // What it collided with
+  collidedWith?: Food | Obstacle | Snake | Position | any; // What it collided with (using any for treasure/key)
   position: Position; // Where the collision occurred (head position)
 }
 
@@ -46,7 +46,8 @@ export class CollisionDetector {
 
     for (const snake of snakes) {
       // If this snake already had a fatal collision determined in this tick, skip further checks for it
-      if (fatallyCollidedSnakes.has(snake) || !snake.isAlive()) {
+      // Also skip snakes that are in death animation
+      if (fatallyCollidedSnakes.has(snake) || !snake.isAlive() || snake.isDyingAnimation()) {
         continue;
       }
 
@@ -124,6 +125,26 @@ export class CollisionDetector {
                 position: head,
               });
               // Continue checking other nearby items for this snake
+              break;
+
+            case "key":
+              // Key collision is not fatal, just report it for pickup
+              collisionResults.push({
+                type: "key",
+                snake: snake,
+                collidedWith: item.position,
+                position: head,
+              });
+              break;
+
+            case "treasure_chest":
+              // Treasure chest collision is not fatal, just report it for opening attempt
+              collisionResults.push({
+                type: "treasure_chest",
+                snake: snake,
+                collidedWith: item.position,
+                position: head,
+              });
               break;
 
             case "snake":

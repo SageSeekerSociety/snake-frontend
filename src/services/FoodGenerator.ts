@@ -5,6 +5,7 @@ import { EntityManager } from "../managers/EntityManager"; // Adjust path as nee
 import { EntityFactory } from "../factories/EntityFactory"; // Adjust path as needed
 import { Snake } from "../entities/Snake"; // Adjust path as needed
 import { VortexFieldManager } from "../managers/VortexFieldManager";
+import { SafeZoneManager } from "../managers/SafeZoneManager";
 
 /**
  * Service responsible for generating food items using a phased, dynamic approach
@@ -15,6 +16,7 @@ export class FoodGenerator {
   private entityManager: EntityManager;
   private entityFactory: EntityFactory;
   private vortexFieldManager?: VortexFieldManager;
+  private safeZoneManager?: SafeZoneManager;
 
   // Cached dimensions and config values for performance
   private readonly boxSize = GameConfig.CANVAS.BOX_SIZE;
@@ -31,10 +33,11 @@ export class FoodGenerator {
   private readonly poissonGridWidth = Math.ceil(this.mapWidth / this.poissonCellSize);
   private readonly poissonGridHeight = Math.ceil(this.mapHeight / this.poissonCellSize);
 
-  constructor(entityManager: EntityManager, entityFactory: EntityFactory, vortexFieldManager?: VortexFieldManager) {
+  constructor(entityManager: EntityManager, entityFactory: EntityFactory, vortexFieldManager?: VortexFieldManager, safeZoneManager?: SafeZoneManager) {
     this.entityManager = entityManager;
     this.entityFactory = entityFactory;
     this.vortexFieldManager = vortexFieldManager;
+    this.safeZoneManager = safeZoneManager;
   }
 
   /**
@@ -62,10 +65,10 @@ export class FoodGenerator {
           const color = this.getFoodColor(typeToGen, value);
           const ttl = this.getFoodTTL(typeToGen);
 
-          // Basic bounds check (Poisson should handle this, but for safety)
+          // Basic bounds check and safe zone check
           if (position.x >= 0 && position.x < this.mapWidth && position.y >= 0 && position.y < this.mapHeight) {
-              // Check if the position is occupied by obstacles
-              if (!this.entityManager.isPositionOccupied(position, ['obstacle'])) {
+              // Check if the position is occupied by obstacles and in safe zone
+              if (!this.entityManager.isPositionOccupied(position, ['obstacle']) && this.isPositionInSafeZone(position)) {
                   const food = this.entityFactory.createFood(position, typeToGen, value, color, ttl);
                   if (food) {
                       initialFood.push(food);
@@ -460,7 +463,7 @@ export class FoodGenerator {
 
   /**
    * Performs dynamic checks for a placement position against live snakes.
-   * Checks for occupation by body/head and proximity to heads.
+   * Checks for occupation by body/head, proximity to heads, and safe zone constraints.
    */
   private _isValidPlacementDynamicCheck(position: Position, liveSnakes: Snake[]): boolean {
      // Check if the exact cell is occupied by a snake part or obstacle
@@ -476,6 +479,11 @@ export class FoodGenerator {
       // Check proximity to snake heads using the specific safe range
       if (this.isTooCloseToAnyHead(position, liveSnakes, GameConfig.FOOD_ADV.MIN_DISTANCE_FROM_HEAD)) {
           return false; // Too close to a head
+      }
+
+      // Check if position is within safe zone
+      if (!this.isPositionInSafeZone(position)) {
+          return false; // Outside safe zone
       }
 
       return true; // Position is valid dynamically
@@ -523,6 +531,17 @@ export class FoodGenerator {
 
        // Fallback: return the last needed type in the weighted list (should rarely happen)
        return weightedNeeds.length > 0 ? weightedNeeds[weightedNeeds.length - 1].type : null;
+   }
+
+   /**
+    * Checks if a position is within the current safe zone
+    */
+   private isPositionInSafeZone(position: Position): boolean {
+       if (!this.safeZoneManager) {
+           return true; // If no safe zone manager, consider all positions safe
+       }
+       
+       return this.safeZoneManager.isPositionSafe(position);
    }
 
 } // End of FoodGenerator class

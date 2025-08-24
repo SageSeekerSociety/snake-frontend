@@ -177,7 +177,13 @@ export class APIDecisionStrategy implements SnakeDecisionStrategy {
     try {
       // 1. Prepare input data using the provided utility function
       const gameStateStr = formatGameStateForAPI(
-        remainingTicks, gameState.foodItems, gameState.obstacles, gameState.snakes
+        remainingTicks, 
+        gameState.foodItems, 
+        gameState.obstacles, 
+        gameState.snakes,
+        undefined, // vortex data
+        gameState.treasureChests || [],
+        gameState.keys || []
       );
 
       // 2. Create the execution request item

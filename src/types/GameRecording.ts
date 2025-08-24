@@ -23,6 +23,9 @@ export interface SerializedSnake {
     [key: string]: any;
   };
   entityType: EntityType;
+  // 宝箱钥匙系统相关属性
+  heldKeyId?: string | null;
+  keyHoldTime?: number;
 }
 
 // 序列化后的食物数据结构（对应Food.serialize()的返回值）
@@ -44,12 +47,31 @@ export interface SerializedObstacle {
   entityType: EntityType;
 }
 
+// 序列化的宝箱
+export interface SerializedTreasureChest {
+  position: { x: number; y: number };
+  size: number;
+  score: number;
+  isOpened: boolean;
+  entityType: EntityType;
+}
+
+// 序列化的钥匙
+export interface SerializedKey {
+  position: { x: number; y: number };
+  size: number;
+  id: string;
+  entityType: EntityType;
+}
+
 // 录制帧中的游戏状态（序列化后的数据）
 export interface RecordingGameState {
   foodItems: SerializedFood[];
   obstacles: SerializedObstacle[];
   snakes: SerializedSnake[];
   vortexField: VortexFieldApiData;
+  treasureChests?: SerializedTreasureChest[];
+  keys?: SerializedKey[];
 }
 
 /**

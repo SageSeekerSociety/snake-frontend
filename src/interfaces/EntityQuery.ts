@@ -8,6 +8,11 @@ import { Position } from "../types/Position";
  */
 export interface IEntityQuery {
   /**
+   * Gets all snakes (alive and dead)
+   */
+  getAllSnakes(): Snake[];
+
+  /**
    * Gets all currently alive snakes
    */
   getLiveSnakes(): Snake[];

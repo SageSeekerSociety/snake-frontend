@@ -1,6 +1,8 @@
 import { Snake, DeathData } from "../entities/Snake";
 import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
 import { GridItem, SpatialHashGrid } from "../core/SpatialHashGrid";
 import { Position } from "../types/Position";
 import { GameState } from "../types/GameState";
@@ -9,7 +11,7 @@ import { EntityFactory } from "../factories/EntityFactory"; // Import EntityFact
 import { FoodType } from "../config/GameConfig";
 import { IEntityQuery, IScoreMultiplierProvider } from "../interfaces/EntityQuery";
 
-type EntityMapKey = Snake | Food | Obstacle | Position; // Position used for snake segments
+type EntityMapKey = Snake | Food | Obstacle | TreasureChest | Key | Position; // Position used for snake segments
 
 /**
  * Manages all game entities (Snakes, Food, Obstacles)
@@ -19,6 +21,8 @@ export class EntityManager implements IEntityQuery {
   private snakes: Snake[] = [];
   private foodItems: Food[] = [];
   private obstacles: Obstacle[] = [];
+  private treasureChests: TreasureChest[] = [];
+  private keys: Key[] = [];
   private entityIds: Map<EntityMapKey, number> = new Map(); // Map entities/segments to grid IDs
   private spatialGrid: SpatialHashGrid;
   private entityFactory: EntityFactory; // Add reference to EntityFactory
@@ -80,12 +84,22 @@ export class EntityManager implements IEntityQuery {
     return this.obstacles;
   }
 
+  getAllTreasureChests(): TreasureChest[] {
+    return this.treasureChests;
+  }
+
+  getAllKeys(): Key[] {
+    return this.keys;
+  }
+
   getGameState(): GameState {
     // Return copies to prevent external modification
     return {
       snakes: [...this.snakes],
       foodItems: [...this.foodItems],
       obstacles: [...this.obstacles],
+      treasureChests: [...this.treasureChests],
+      keys: [...this.keys],
     };
   }
 
@@ -126,6 +140,36 @@ export class EntityManager implements IEntityQuery {
     this.obstacles.push(obstacle);
     const gridId = this.spatialGrid.insert(obstacle.getPosition(), "obstacle");
     this.entityIds.set(obstacle, gridId);
+  }
+
+  addTreasureChest(treasureChest: TreasureChest): void {
+    this.treasureChests.push(treasureChest);
+    const gridId = this.spatialGrid.insert(treasureChest.getPosition(), "treasure_chest");
+    this.entityIds.set(treasureChest, gridId);
+  }
+
+  addKey(key: Key): void {
+    this.keys.push(key);
+    const gridId = this.spatialGrid.insert(key.getPosition(), "key");
+    this.entityIds.set(key, gridId);
+  }
+
+  removeTreasureChest(treasureChestToRemove: TreasureChest): void {
+    this.treasureChests = this.treasureChests.filter(chest => chest !== treasureChestToRemove);
+    const gridId = this.entityIds.get(treasureChestToRemove);
+    if (gridId !== undefined) {
+      this.spatialGrid.remove(gridId);
+      this.entityIds.delete(treasureChestToRemove);
+    }
+  }
+
+  removeKey(keyToRemove: Key): void {
+    this.keys = this.keys.filter(key => key !== keyToRemove);
+    const gridId = this.entityIds.get(keyToRemove);
+    if (gridId !== undefined) {
+      this.spatialGrid.remove(gridId);
+      this.entityIds.delete(keyToRemove);
+    }
   }
 
   removeFood(foodToRemove: Food): void {
@@ -335,7 +379,10 @@ export class EntityManager implements IEntityQuery {
   updateAnimations(deltaTime: number): void {
     this.snakes.forEach((snake) => {
       // Only update animation for snakes that are alive or in death animation
-      if (snake.isAlive() || snake.isDyingAnimation()) {
+      const isAlive = snake.isAlive();
+      const isDying = snake.isDyingAnimation();
+      if (isAlive || isDying) {
+        // console.log(`[ANIMATION UPDATE] ${snake.getMetadata()?.name}: isAlive=${isAlive}, isDying=${isDying}, deltaTime=${deltaTime.toFixed(1)}`);
         snake.updateAnimation(deltaTime);
       }
     });
@@ -363,6 +410,8 @@ export class EntityManager implements IEntityQuery {
     this.snakes = [];
     this.foodItems = [];
     this.obstacles = [];
+    this.treasureChests = [];
+    this.keys = [];
 
     // Clear spatial grid and entity ID mappings
     this.entityIds.clear();

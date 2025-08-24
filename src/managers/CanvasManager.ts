@@ -1,12 +1,19 @@
 import { GameConfig } from "../config/GameConfig";
-import { Entity, isFood, isSnake } from "../core/Entity";
+import { Entity, isFood, isSnake, isTreasureChest, isKey } from "../core/Entity";
 import { SnakeRenderer } from "../core/renderers/SnakeRenderer";
 import { FoodRenderer } from "../core/renderers/FoodRenderer";
 import { ObstacleRenderer } from "../core/renderers/ObstacleRenderer";
 import { VortexFieldRenderer } from "../core/renderers/VortexFieldRenderer";
+import { TreasureChestRenderer } from "../core/renderers/TreasureChestRenderer";
+import { KeyRenderer } from "../core/renderers/KeyRenderer";
+import { SafeZoneRenderer } from "../core/renderers/SafeZoneRenderer";
+import { SafeZoneStatus } from "./SafeZoneManager";
 import { Snake } from "../entities/Snake";
 import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
+import { EntityType } from "../types/EntityType";
 // VortexFieldRenderer has its own render state interface
 
 export class CanvasManager {
@@ -23,6 +30,9 @@ export class CanvasManager {
   private foodRenderer: FoodRenderer;
   private obstacleRenderer: ObstacleRenderer;
   private vortexFieldRenderer: VortexFieldRenderer;
+  private treasureChestRenderer: TreasureChestRenderer;
+  private keyRenderer: KeyRenderer;
+  private safeZoneRenderer: SafeZoneRenderer;
   
   private frameCount: number = 0;
   private backgroundPattern: CanvasPattern | null = null;
@@ -52,6 +62,9 @@ export class CanvasManager {
     this.foodRenderer = new FoodRenderer();
     this.obstacleRenderer = new ObstacleRenderer();
     this.vortexFieldRenderer = new VortexFieldRenderer();
+    this.treasureChestRenderer = new TreasureChestRenderer();
+    this.keyRenderer = new KeyRenderer();
+    this.safeZoneRenderer = new SafeZoneRenderer(canvas);
 
     this.setupCanvas();
     this.createBackgroundPattern();
@@ -163,7 +176,7 @@ export class CanvasManager {
     this.mainCtx.drawImage(this.backgroundCanvas, 0, 0);
   }
 
-  render(renderables: Entity[], vortexState?: any, timestamp: number = performance.now()): void {
+  render(renderables: Entity[], vortexState?: any, timestamp: number = performance.now(), safeZoneStatus?: SafeZoneStatus): void {
     // 计算帧间隔时间，限制最大值避免大延迟后的动画跳跃
     const deltaTime = this.lastRenderTime 
       ? Math.min(timestamp - this.lastRenderTime, 100) 
@@ -179,6 +192,8 @@ export class CanvasManager {
 
     const foodItems: Food[] = [];
     const snakes: Snake[] = [];
+    const treasureChests: TreasureChest[] = [];
+    const keys: Key[] = [];
 
     // 分类可渲染实体
     for (const renderable of renderables) {
@@ -186,6 +201,10 @@ export class CanvasManager {
         foodItems.push(renderable as Food);
       } else if (isSnake(renderable)) {
         snakes.push(renderable as Snake);
+      } else if (isTreasureChest(renderable)) {
+        treasureChests.push(renderable as TreasureChest);
+      } else if (isKey(renderable)) {
+        keys.push(renderable as Key);
       }
     }
 
@@ -197,7 +216,16 @@ export class CanvasManager {
       }
     }
 
+    // Render safe zone first (as background overlay)
+    if (safeZoneStatus) {
+      this.safeZoneRenderer.render(safeZoneStatus);
+      this.safeZoneRenderer.renderShrinkingAnimation(safeZoneStatus);
+    }
+
+    // Render in layering order: food -> keys -> treasure chests -> vortex field -> snakes
     this.renderFoodItems(foodItems);
+    this.renderKeys(keys);
+    this.renderTreasureChests(treasureChests);
     
     // Render vortex field (rendered before snakes to appear as background effect)
     if (vortexState) {
@@ -215,9 +243,22 @@ export class CanvasManager {
 
   private renderSnakes(snakes: Snake[]): void {
     for (const snake of snakes) {
-      if (snake.isAlive()) {
+      // Render snakes that are alive OR in death animation
+      if (snake.isAlive() || snake.isDyingAnimation()) {
         this.snakeRenderer.render(this.mainCtx, snake);
       }
+    }
+  }
+
+  private renderTreasureChests(treasureChests: TreasureChest[]): void {
+    for (const treasureChest of treasureChests) {
+      this.treasureChestRenderer.render(this.mainCtx, treasureChest);
+    }
+  }
+
+  private renderKeys(keys: Key[]): void {
+    for (const key of keys) {
+      this.keyRenderer.render(this.mainCtx, key);
     }
   }
 

@@ -26,6 +26,7 @@ export class SnakeRenderer implements EntityRenderer<Snake> {
   }
 
   render(ctx: CanvasRenderingContext2D, snake: Snake): void {
+    // Only skip rendering if snake is completely dead (not alive AND not in death animation)
     if (!snake.isAlive() && !snake.isDyingAnimation()) return;
 
     // 使用插值后的身体位置进行渲染，实现平滑动画效果

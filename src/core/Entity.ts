@@ -4,6 +4,8 @@ import { EntityType } from "../types/EntityType";
 import { Snake } from "../entities/Snake";
 import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
 import { GameState } from "../types/GameState";
 
 export abstract class Entity implements Updatable {
@@ -45,4 +47,12 @@ export function isFood(entity: Entity): entity is Food {
 
 export function isObstacle(entity: Entity): entity is Obstacle {
   return entity.getEntityType() === EntityType.OBSTACLE;
+}
+
+export function isTreasureChest(entity: Entity): entity is TreasureChest {
+  return entity.getEntityType() === EntityType.TREASURE_CHEST;
+}
+
+export function isKey(entity: Entity): entity is Key {
+  return entity.getEntityType() === EntityType.KEY;
 }

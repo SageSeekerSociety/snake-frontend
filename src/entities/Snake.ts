@@ -53,6 +53,9 @@ export class Snake extends Entity {
   private deathAnimationSpeed: number = 0.05; // Death animation speed
   // Death data
   public deathData: DeathData | null = null;
+  // Treasure system properties
+  private heldKeyId: string | null = null;
+  private keyHoldTime: number = 0;
 
   constructor(
     position: Position,
@@ -80,6 +83,8 @@ export class Snake extends Entity {
     this.growthLength = 0;
     this.decisionStrategy = decisionStrategy;
     this.metadata = metadata;
+    this.heldKeyId = null;
+    this.keyHoldTime = 0;
   }
 
   private initializeBody(position: Position, direction: Direction): Position[] {
@@ -104,7 +109,7 @@ export class Snake extends Entity {
     if (!this.alive && !this.isDying) return;
 
     // Apply decision strategy if snake is alive
-    if(this.alive && !this.isDying) {
+    if (this.alive && !this.isDying) {
       await this.decisionStrategy.makeDecision(this, gameState);
     }
 
@@ -139,7 +144,8 @@ export class Snake extends Entity {
     // Update death animation
     if (this.isDying) {
       // Update death progress based on deltaTime
-      this.deathProgress += this.deathAnimationSpeed * (deltaTime / 16.67);
+      const progressIncrement = this.deathAnimationSpeed * (deltaTime / 16.67);
+      this.deathProgress += progressIncrement;
 
       // Mark as fully dead when animation completes
       if (this.deathProgress >= 1) {
@@ -268,7 +274,7 @@ export class Snake extends Entity {
   activateShield(duration?: number, cost?: number): void {
     const shieldDuration = duration ?? GameConfig.SHIELD.DURATION;
     const shieldCost = cost ?? GameConfig.SHIELD.COST;
-    
+
     // Check if shield can be activated
     if (!this.shieldActive && this.shieldCooldown <= 0 && this.score >= shieldCost) {
       this.score -= shieldCost;
@@ -458,7 +464,7 @@ export class Snake extends Entity {
       }
       // Use current position for newly grown segments
       else {
-        interpolatedBody.push({...this.body[i]});
+        interpolatedBody.push({ ...this.body[i] });
       }
     }
 
@@ -503,6 +509,40 @@ export class Snake extends Entity {
     }
   }
 
+  // Treasure system methods
+  holdKey(keyId: string): void {
+    if (this.heldKeyId !== null) {
+      throw new Error("Snake is already holding a key");
+    }
+    this.heldKeyId = keyId;
+    this.keyHoldTime = 0;
+  }
+
+  dropKey(): string | null {
+    const keyId = this.heldKeyId;
+    this.heldKeyId = null;
+    this.keyHoldTime = 0;
+    return keyId;
+  }
+
+  hasKey(): boolean {
+    return this.heldKeyId !== null;
+  }
+
+  getHeldKeyId(): string | null {
+    return this.heldKeyId;
+  }
+
+  getKeyHoldTime(): number {
+    return this.keyHoldTime;
+  }
+
+  incrementKeyHoldTime(): void {
+    if (this.heldKeyId !== null) {
+      this.keyHoldTime++;
+    }
+  }
+
   /**
    * Serialize snake state for game recording
    */
@@ -532,7 +572,10 @@ export class Snake extends Entity {
       entityType: this.getEntityType(),
       // Shield-related state
       isInitialShieldActive: this.isInitialShieldActive,
-      justActivatedShield: this.justActivatedShield
+      justActivatedShield: this.justActivatedShield,
+      // Treasure system state
+      heldKeyId: this.heldKeyId,
+      keyHoldTime: this.keyHoldTime
     };
   }
 }

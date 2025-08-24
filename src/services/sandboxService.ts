@@ -3,6 +3,8 @@ import { Direction, FoodType } from "../config/GameConfig";
 import { Snake } from "../entities/Snake";
 import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
 import { User, PlayersResponse } from "../types/User";
 import { VortexFieldApiData } from "../types/VortexField";
 import { SSE } from "sse.js";
@@ -304,15 +306,17 @@ export const formatGameStateForAPI = (
   foods: Food[],
   obstacles: Obstacle[],
   snakes: Snake[],
-  vortexData?: VortexFieldApiData
+  vortexData?: VortexFieldApiData,
+  treasureChests: TreasureChest[] = [],
+  keys: Key[] = []
 ): string => {
   let input = `${remainingTicks}\n`;
 
-  // 特殊物品（食物和墙）
-  const items = [...foods, ...obstacles];
+  // 特殊物品（食物、墙、宝箱、钥匙）
+  const items = [...foods, ...obstacles, ...treasureChests, ...keys];
   input += `${items.length}\n`;
 
-  // 添加食物和障碍物
+  // 添加食物、障碍物、宝箱、钥匙
   items.forEach((item) => {
     const pos = item.getPosition();
     const x = Math.floor(pos.x / 20); // 转换为网格坐标
@@ -329,6 +333,10 @@ export const formatGameStateForAPI = (
       } else {
         value = Number(foodValue); // 普通食物
       }
+    } else if (item instanceof Key) {
+      value = -3; // 钥匙
+    } else if (item instanceof TreasureChest) {
+      value = -5; // 宝箱
     } else {
       value = -4; // 墙
     }
@@ -368,12 +376,59 @@ export const formatGameStateForAPI = (
   });
 
   // 附加涡流场信息（API兼容性设计）
-  if (vortexData) {
-    input += `${vortexData.stateCode} ${vortexData.param1} ${vortexData.param2} ${vortexData.param3} ${vortexData.param4} ${vortexData.param5}\n`;
-  } else {
-    // 默认非激活状态
-    input += `0 0 0 0 0 0\n`;
-  }
+  // if (vortexData) {
+  //   input += `${vortexData.stateCode} ${vortexData.param1} ${vortexData.param2} ${vortexData.param3} ${vortexData.param4} ${vortexData.param5}\n`;
+  // } else {
+  //   // 默认非激活状态
+  //   input += `0 0 0 0 0 0\n`;
+  // }
+
+  // 附加宝箱信息块
+  const openTreasures = treasureChests.filter((treasure) => !treasure.isOpened());
+  input += `${openTreasures.length}\n`;
+  
+  // 添加每个未开启宝箱的位置和分数
+  openTreasures.forEach((treasure) => {
+    const pos = treasure.getPosition();
+    const x = Math.floor(pos.x / 20);
+    const y = Math.floor(pos.y / 20);
+    const score = treasure.getScore();
+    input += `${y} ${x} ${score}\n`;
+  });
+
+  // 附加钥匙信息
+  // 计算总钥匙数（地上的 + 蛇持有的）
+  const groundKeys = keys;
+  const heldKeysData: Array<{x: number, y: number, studentId: string, remainingTime: number}> = [];
+  
+  // 收集蛇持有的钥匙信息
+  snakes.filter(snake => snake.isAlive()).forEach((snake) => {
+    if (snake.hasKey()) {
+      const headPos = snake.getBody()[0];
+      const x = Math.floor(headPos.x / 20);
+      const y = Math.floor(headPos.y / 20);
+      const studentId = snake.getMetadata().username || snake.getMetadata().studentId || 'unknown';
+      const remainingTime = 40 - snake.getKeyHoldTime(); // 剩余时间
+      
+      heldKeysData.push({ x, y, studentId, remainingTime });
+    }
+  });
+
+  const totalKeys = groundKeys.length + heldKeysData.length;
+  input += `${totalKeys}\n`;
+  
+  // 添加地上的钥匙（没有持有者）
+  groundKeys.forEach((key) => {
+    const pos = key.getPosition();
+    const x = Math.floor(pos.x / 20);
+    const y = Math.floor(pos.y / 20);
+    input += `${y} ${x} -1 0\n`; // -1表示无持有者，0表示无持有时间
+  });
+  
+  // 添加蛇持有的钥匙
+  heldKeysData.forEach((keyData) => {
+    input += `${keyData.y} ${keyData.x} ${keyData.studentId} ${keyData.remainingTime}\n`;
+  });
 
   // console.log(input);
 

@@ -162,6 +162,83 @@ export const GameConfig = {
     CPU_TIME_LIMIT_SECONDS: 1,
     MEMORY_LIMIT_KB: 128 * 1024,
     WALL_TIME_LIMIT_SECONDS: 10,
+  },
+
+  // Treasure & Key System Configuration
+  TREASURE_SYSTEM: {
+    // Feature toggle - set to false to disable entirely
+    ENABLED: true,
+    
+    // Spawn timing (ticks)
+    FIRST_TREASURE_TICK: 120,
+    SECOND_TREASURE_TICK: 220,
+    
+    // Treasure scoring
+    BASE_SCORE: 30,
+    SCORE_MULTIPLIER: 0.6,
+    MIN_SCORE: 30,
+    MAX_SCORE: 75,
+    
+    // Key mechanics
+    KEY_HOLD_TIME_LIMIT: 40, // ticks before auto-drop
+    MIN_TREASURE_DISTANCE: 12, // Manhattan distance between keys and treasure
+    
+    // Spatial constraints
+    MIN_DISTANCE_FROM_SNAKE_HEAD: 3, // Minimum distance when spawning
+    
+    // Key quantity calculation: max(2, floor(alive_snakes / 2))
+    MIN_KEYS_PER_TREASURE: 2,
+    MAX_KEYS_PER_TREASURE: 4,
+    KEYS_PER_SNAKE_DIVISOR: 2,
+  },
+
+  // Safe Zone System Configuration
+  SAFE_ZONE: {
+    // Feature toggle - set to false to disable entirely
+    ENABLED: true,
+    
+    // Game phase definitions (in ticks)
+    PHASES: {
+      [GamePhase.EARLY]: {
+        START_TICK: 1,
+        END_TICK: 80,
+        SAFE_ZONE_STATE: "STABLE" // No shrinking
+      },
+      [GamePhase.MID]: {
+        START_TICK: 81,
+        END_TICK: 200,
+        SAFE_ZONE_STATE: "SHRINKING", // Two shrinking periods
+        SHRINK_EVENTS: [
+          { START_TICK: 81, DURATION: 20, TARGET_SIZE: { WIDTH: 32, HEIGHT: 24 } },
+          { START_TICK: 120, DURATION: 20, TARGET_SIZE: { WIDTH: 24, HEIGHT: 18 } }
+        ]
+      },
+      [GamePhase.LATE]: {
+        START_TICK: 201,
+        END_TICK: 256,
+        SAFE_ZONE_STATE: "SHRINKING", // Final shrinking
+        SHRINK_EVENTS: [
+          { START_TICK: 221, DURATION: 20, TARGET_SIZE: { WIDTH: 20, HEIGHT: 16 } }
+        ]
+      }
+    },
+    
+    // Initial safe zone (full map)
+    INITIAL_BOUNDS: {
+      X_MIN: 0,
+      Y_MIN: 0, 
+      X_MAX: 39, // CANVAS.COLUMNS - 1
+      Y_MAX: 29  // CANVAS.ROWS - 1
+    },
+    
+    // Visual settings
+    DANGER_ZONE_COLOR: "#ff0000",
+    DANGER_ZONE_ALPHA: 0.3,
+    BORDER_COLOR: "#ff0000",
+    BORDER_WIDTH: 2,
+    
+    // Warning system
+    WARNING_TICKS_BEFORE_SHRINK: 10 // Show warning 10 ticks before shrinking
   }
 
 } as const;
