@@ -9,6 +9,7 @@ import { EntityType } from "../types/EntityType";
 export interface SnakeMetadata {
   studentId?: string;      // Student ID (for student AI snakes)
   name?: string;           // Snake name
+  matchNumber?: number;
   [key: string]: any;      // Additional metadata
 }
 

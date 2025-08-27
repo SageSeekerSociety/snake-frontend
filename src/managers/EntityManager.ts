@@ -11,6 +11,7 @@ import { EntityFactory } from "../factories/EntityFactory"; // Import EntityFact
 import { FoodType, GameConfig } from "../config/GameConfig";
 import { IEntityQuery, IScoreMultiplierProvider } from "../interfaces/EntityQuery";
 import { SafeZoneBounds } from "../types/GameState";
+import { createSnakePlaceholder, getSnakeDisplayName } from "../utils/snakeDisplayUtils";
 
 type EntityMapKey = Snake | Food | Obstacle | TreasureChest | Key | Position; // Position used for snake segments
 
@@ -283,7 +284,7 @@ export class EntityManager implements IEntityQuery {
 
     const snakeIndex = this.snakes.indexOf(snake) + 1;
     const head = snake.getBody()[0];
-    const snakeName = snake.getMetadata()?.name || `Snake ${snakeIndex}`;
+    const snakeName = getSnakeDisplayName(snake, this.snakes);
 
     console.log(
       `[DEATH] ${snakeName} died: ${reason} at position (${head.x / 20}, ${
@@ -302,12 +303,11 @@ export class EntityManager implements IEntityQuery {
     // Start the dying process (e.g., animation)
     snake.die(reason);
 
-    // Emit notification with color information, but don't remove from grid yet
-    const snakeColor = snake.getColor();
-    const coloredSnakeName = `<span style="color: ${snakeColor}">${snakeName}</span>`;
+    // Emit notification with placeholder
+    const snakePlaceholder = createSnakePlaceholder(snake);
     eventBus.emit(
       GameEventType.UI_NOTIFICATION,
-      `${coloredSnakeName} ${reason}`
+      `${snakePlaceholder} ${reason}`
     );
   }
 
@@ -316,8 +316,7 @@ export class EntityManager implements IEntityQuery {
    * Generates death food.
    */
   private handleSnakeDeathCleanup(snake: Snake): void {
-    const snakeName =
-      snake.getMetadata()?.name || `Snake ${snake.deathData?.index}`;
+    const snakeName = getSnakeDisplayName(snake, this.snakes);
     console.log(`[Cleanup] Cleaning up resources for ${snakeName}`);
 
     // 1. Remove all segments from the spatial grid
@@ -365,9 +364,7 @@ export class EntityManager implements IEntityQuery {
           // snake.update calls the appropriate decision strategy
           await snake.update(0, gameState); // deltaTime is not directly used here
         } catch (error) {
-          const snakeName =
-            snake.getMetadata()?.name ||
-            `Snake ${this.snakes.indexOf(snake) + 1}`;
+          const snakeName = getSnakeDisplayName(snake, this.snakes);
           console.error(`Error getting decision for ${snakeName}:`, error);
           // Kill the snake when a decision error occurs
           this.killSnake(snake, "failed to make a decision");

@@ -21,6 +21,7 @@ import { SafeZoneManager } from "./SafeZoneManager";
 import { gameRecordingService } from "../services/gameRecordingService";
 import { v4 as uuidv4 } from 'uuid';
 import { Obstacle } from "../entities/Obstacle";
+import { createSnakePlaceholder, getSnakeDisplayName } from "../utils/snakeDisplayUtils";
 
 /**
  * Orchestrates the overall game flow, managing different subsystems.
@@ -240,11 +241,7 @@ export class GameManager {
       // 组装完整的初始游戏状态（第0帧）
       const initialGameState = this.assembleGameState();
       
-      // Get initial treasure chests and keys from treasure system
-      const initialTreasureChests = this.treasureSystem.getCurrentTreasure() 
-        ? [this.treasureSystem.getCurrentTreasure()!] 
-        : [];
-      const initialKeys = this.treasureSystem.getCurrentKeys();
+      // Initial treasure data is handled by treasure system internally
 
       gameRecordingService.startRecording(
         this.selectedUsers,
@@ -382,7 +379,7 @@ export class GameManager {
           continue;
         }
 
-        const snakeName = snake.getMetadata()?.name || `Snake ${this.entityManager.getAllSnakes().indexOf(snake) + 1}`;
+        const snakeName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
         console.log(`[SafeZone] ${snakeName} violated safe zone at (${Math.floor(headPosition.x / 20)}, ${Math.floor(headPosition.y / 20)})`);
         this.startDeathAnimation(snake, "left the safe zone");
       }
@@ -403,7 +400,8 @@ export class GameManager {
       if (pullVector) {
         // Apply vortex pull movement
         this.applyVortexPullToSnake(snake, pullVector);
-        console.log(`[VortexField] Pulled ${snake.getMetadata().name} ${pullVector.direction}`);
+        const displayName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
+        console.log(`[VortexField] Pulled ${displayName} ${pullVector.direction}`);
       }
     }
   }
@@ -479,9 +477,6 @@ export class GameManager {
       return;
     }
 
-    const snakeIndex = this.entityManager.getAllSnakes().indexOf(result.snake) + 1;
-    const snakeName = result.snake.getMetadata()?.name || `Snake ${snakeIndex}`;
-
     let deathReason = "";
     
     switch (result.type) {
@@ -497,11 +492,7 @@ export class GameManager {
       case "snake":
         if (result.collidedWith instanceof Snake) {
           const collidedSnake = result.collidedWith as Snake;
-          const collidedSnakeColor = collidedSnake.getColor();
-          const collidedSnakeName =
-            collidedSnake.getMetadata()?.name ||
-            `Snake ${this.entityManager.getAllSnakes().indexOf(collidedSnake) + 1}`;
-          const coloredCollidedSnakeName = `<span style="color: ${collidedSnakeColor}">${collidedSnakeName}</span>`;
+          const collidedSnakePlaceholder = createSnakePlaceholder(collidedSnake);
 
           // Check for head-to-head collision
           const isHeadCollision =
@@ -518,20 +509,22 @@ export class GameManager {
               return;
             } else if (snakeHasShield && !collidedSnakeHasShield) {
               // Only result.snake has shield, kill the other snake
-              deathReason = `hit by shielded ${result.snake.getMetadata()?.name || snakeName}`;
+              const currentSnakePlaceholder = createSnakePlaceholder(result.snake);
+              deathReason = `hit by shielded ${currentSnakePlaceholder}`;
               this.startDeathAnimation(collidedSnake, deathReason);
               return;
             } else if (!snakeHasShield && collidedSnakeHasShield) {
               // Only collidedSnake has shield, kill result.snake
-              deathReason = `hit ${coloredCollidedSnakeName}`;
+              deathReason = `hit ${collidedSnakePlaceholder}`;
             } else {
               // Neither has shields, both die
-              deathReason = `hit ${coloredCollidedSnakeName}`;
-              const otherReason = `hit ${result.snake.getMetadata()?.name || snakeName}`;
+              deathReason = `hit ${collidedSnakePlaceholder}`;
+              const currentSnakePlaceholder = createSnakePlaceholder(result.snake);
+              const otherReason = `hit ${currentSnakePlaceholder}`;
               this.startDeathAnimation(collidedSnake, otherReason);
             }
           } else {
-            deathReason = `hit ${coloredCollidedSnakeName}`;
+            deathReason = `hit ${collidedSnakePlaceholder}`;
           }
         } else {
           deathReason = "hit snake";
@@ -552,7 +545,8 @@ export class GameManager {
       return;
     }
 
-    console.log(`[DEATH] Starting death animation for ${snake.getMetadata()?.name}: ${reason}`);
+    const displayName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
+    console.log(`[DEATH] Starting death animation for ${displayName}: ${reason}`);
     
     // Handle key drop if snake has one
     this.treasureSystem.handleSnakeDeath(snake);
@@ -560,13 +554,11 @@ export class GameManager {
     // Start the death animation (Snake.die() method)
     snake.die(reason);
 
-    // Emit notification with color information
-    const snakeColor = snake.getColor();
-    const snakeName = snake.getMetadata()?.name || `Snake ${this.entityManager.getAllSnakes().indexOf(snake) + 1}`;
-    const coloredSnakeName = `<span style="color: ${snakeColor}">${snakeName}</span>`;
+    // Emit notification with placeholder
+    const snakePlaceholder = createSnakePlaceholder(snake);
     eventBus.emit(
       GameEventType.UI_NOTIFICATION,
-      `${coloredSnakeName} ${reason}`
+      `${snakePlaceholder} ${reason}`
     );
   }
 
@@ -661,8 +653,8 @@ export class GameManager {
     // Calculate and display final scores
     const finalScores = this.entityManager
       .getAllSnakes()
-      .map((snake, index) => ({
-        name: snake.getMetadata().name || `Snake ${index + 1}`,
+      .map((snake) => ({
+        name: getSnakeDisplayName(snake, this.entityManager.getAllSnakes()),
         username: snake.getMetadata().username || ``,
         score: snake.getScore(),
         isAlive: snake.isAlive(), // Check final status

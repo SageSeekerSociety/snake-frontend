@@ -6,6 +6,7 @@ import { GameConfig, Direction } from "../config/GameConfig";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { IEntityQuery } from "../interfaces/EntityQuery";
 import { SafeZoneManager } from "./SafeZoneManager";
+import { createSnakePlaceholder } from "../utils/snakeDisplayUtils";
 
 export interface TreasureSystemConfig {
   enabled: boolean;
@@ -190,6 +191,11 @@ export class TreasureSystem {
     this.currentKeys = this.spawnKeys(keyCount, treasurePosition, liveSnakes);
     
     eventBus.emit(GameEventType.TREASURE_SPAWNED, { treasure: this.currentTreasure, keys: this.currentKeys });
+    
+    // Send treasure spawn notification
+    eventBus.emit(GameEventType.UI_NOTIFICATION, 
+      `💎 Treasure spawned! Worth ${treasureScore} points.`
+    );
   }
 
   private areAllCurrentKeysOutsideSafeZone(): boolean {
@@ -413,6 +419,12 @@ export class TreasureSystem {
     
     eventBus.emit(GameEventType.TREASURE_OPENED, { snake, treasure, score: treasure.getScore() });
     
+    // Send treasure opened notification with snake placeholder
+    const snakePlaceholder = createSnakePlaceholder(snake);
+    eventBus.emit(GameEventType.UI_NOTIFICATION, 
+      `🏆 ${snakePlaceholder} opened the treasure! +${treasure.getScore()} points`
+    );
+    
     return true;
   }
 
@@ -457,9 +469,6 @@ export class TreasureSystem {
     this.currentKeys = [];
   }
 
-  private isTreasureOpened(): boolean {
-    return this.currentTreasure?.isOpened() ?? true;
-  }
 
   getCurrentTreasure(): TreasureChest | null {
     return this.currentTreasure;
