@@ -210,7 +210,7 @@
             <pre class="code-block">
 剩余游戏刻
 物品总数
-y1 x1 v1
+y1 x1 v1 t1
 ...
 蛇总数
 id1 len1 score1 dir1 shield_cd1 shield_time1 has_key1

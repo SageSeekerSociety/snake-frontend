@@ -330,10 +330,10 @@ export const formatGameStateForAPI = (
   // 添加食物、障碍物、宝箱、钥匙
   items.forEach((item) => {
     const pos = item.getPosition();
-    const x = Math.floor(pos.x / 20); // 转换为网格坐标
+    const x = Math.floor(pos.x / 20);
     const y = Math.floor(pos.y / 20);
 
-    let value;
+    let value, ttl = -1;
     if (item instanceof Food) {
       const foodValue = item.getValue();
       // 将不同类型的食物转换为API要求的格式
@@ -344,6 +344,7 @@ export const formatGameStateForAPI = (
       } else {
         value = Number(foodValue); // 普通食物
       }
+      ttl = item.getTTL() ?? -1;
     } else if (item instanceof Key) {
       value = -3; // 钥匙
     } else if (item instanceof TreasureChest) {
@@ -352,12 +353,8 @@ export const formatGameStateForAPI = (
       value = -4; // 墙
     }
 
-    if (y >= 30 || x >= 40) {
-      console.warn("坐标超出范围:", item);
-    }
-
     // 注意：输入格式要求 y,x 的顺序（规则里规定的坐标系统与内部实现有差异）
-    input += `${y} ${x} ${value}\n`;
+    input += `${y} ${x} ${value} ${ttl}\n`;
   });
 
   // 存活的玩家
@@ -379,9 +376,6 @@ export const formatGameStateForAPI = (
     snake.getBody().forEach((segment) => {
       const x = Math.floor(segment.x / 20);
       const y = Math.floor(segment.y / 20);
-      if (y >= 30 || x >= 40) {
-        console.warn("坐标超出范围:", segment, snake);
-      }
       input += `${y} ${x}\n`;
     });
   });

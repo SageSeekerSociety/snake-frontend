@@ -28,6 +28,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
     const y = Math.floor(pos.y / 20);
 
     let value: number;
+    let ttl: number = -1;
     if (item.entityType === EntityType.FOOD) {
       const food = item as SerializedFood;
       // Convert different food types to API format
@@ -38,6 +39,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
       } else {
         value = Number(food.value); // Normal food
       }
+      ttl = food.ttl ?? -1;
     } else if (item.entityType === EntityType.KEY) {
       value = -3; // Key (on ground)
     } else if (item.entityType === EntityType.TREASURE_CHEST) {
@@ -47,7 +49,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
     }
 
     // Note: Input format requires y,x order (coordinate system difference)
-    input += `${y} ${x} ${value}\n`;
+    input += `${y} ${x} ${value} ${ttl}\n`;
   });
 
   // Alive players
