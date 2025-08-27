@@ -6,7 +6,7 @@
         <div class="pixel-snake"></div>
       </div>
 
-      <form @submit.prevent="handleLogin" class="auth-form">
+      <form @submit.prevent="handleLogin" class="auth-form" v-if="runtimeConfig.ENABLE_USERNAME_LOGIN">
         <div class="form-group">
           <label for="username">学号：</label>
           <input
@@ -70,6 +70,7 @@ import { useRouter } from "vue-router";
 import { useAuth } from "../../stores/auth";
 import { authService } from "../../services/api";
 import { API_URL } from "../../services/httpClient";
+import { runtimeConfig } from "../../services/httpClient";
 
 const router = useRouter();
 const { state, login } = useAuth();

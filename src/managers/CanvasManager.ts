@@ -262,6 +262,23 @@ export class CanvasManager {
     }
   }
 
+  /**
+   * Renders safe zone from serialized data (for replay system)
+   */
+  renderSafeZoneFromSerialized(bounds: any, isWarning: boolean, isShrinking: boolean): void {
+    const safeZoneStatus: SafeZoneStatus = {
+      enabled: true,
+      currentBounds: bounds,
+      isWarning,
+      isShrinking
+    };
+    
+    this.safeZoneRenderer.render(safeZoneStatus);
+    if (isShrinking) {
+      this.safeZoneRenderer.renderShrinkingAnimation(safeZoneStatus);
+    }
+  }
+
   drawStartScreen(): void {
     // 半透明遮罩
     this.mainCtx.fillStyle = "rgba(0, 0, 0, 0.6)";

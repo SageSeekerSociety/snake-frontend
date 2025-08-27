@@ -83,14 +83,12 @@ const setupEventListeners = () => {
   eventBus.on(GameEventType.UI_NOTIFICATION, addNotification);
   eventBus.on(GameEventType.GAME_START, handleGameStart);
   eventBus.on(GameEventType.UI_UPDATE_TIMER, updateRemainingTicks);
-  eventBus.on(GameEventType.GAME_OVER, resetState);
 
   // 返回清理函数
   return () => {
     eventBus.off(GameEventType.UI_NOTIFICATION, addNotification);
     eventBus.off(GameEventType.GAME_START, handleGameStart);
     eventBus.off(GameEventType.UI_UPDATE_TIMER, updateRemainingTicks);
-    eventBus.off(GameEventType.GAME_OVER, resetState);
   };
 };
 

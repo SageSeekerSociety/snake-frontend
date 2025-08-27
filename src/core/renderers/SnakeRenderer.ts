@@ -60,6 +60,9 @@ export class SnakeRenderer implements EntityRenderer<Snake> {
     if (snake.isShieldActive()) {
       this.drawShield(ctx, body[0], size);
     }
+
+    // 5. 在蛇头位置绘制对局编号（小型像素风徽标），放在最上层
+    this.drawHeadMatchNumber(ctx, body[0], size, snake);
   }
 
   private drawSnakeHead(
@@ -157,6 +160,177 @@ export class SnakeRenderer implements EntityRenderer<Snake> {
     ctx.strokeStyle = "#000";
     ctx.lineWidth = 1;
     this.drawPixelBorder(ctx, head.x, head.y, size);
+  }
+
+  // 在蛇头位置绘制对局编号（两位、前导零），保持像素风格且不突兀
+  private drawHeadMatchNumber(
+    ctx: CanvasRenderingContext2D,
+    head: { x: number; y: number },
+    size: number,
+    snake: Snake
+  ): void {
+    try {
+      const meta: any = snake.getMetadata?.() || {};
+      const raw = typeof meta.matchNumber === 'number' && meta.matchNumber > 0
+        ? meta.matchNumber
+        : null;
+      if (!raw) return;
+
+      // 两位字符串
+      const label = String(raw).padStart(2, '0');
+
+      // 使用像素点阵 3x5 字体绘制，保持像素风且精确控制位置
+      const DIGITS: Record<string, number[]> = {
+        '0': [
+          0b111,
+          0b101,
+          0b101,
+          0b101,
+          0b111,
+        ],
+        '1': [
+          0b010,
+          0b110,
+          0b010,
+          0b010,
+          0b111,
+        ],
+        '2': [
+          0b111,
+          0b001,
+          0b111,
+          0b100,
+          0b111,
+        ],
+        '3': [
+          0b111,
+          0b001,
+          0b111,
+          0b001,
+          0b111,
+        ],
+        '4': [
+          0b101,
+          0b101,
+          0b111,
+          0b001,
+          0b001,
+        ],
+        '5': [
+          0b111,
+          0b100,
+          0b111,
+          0b001,
+          0b111,
+        ],
+        '6': [
+          0b111,
+          0b100,
+          0b111,
+          0b101,
+          0b111,
+        ],
+        '7': [
+          0b111,
+          0b001,
+          0b010,
+          0b010,
+          0b010,
+        ],
+        '8': [
+          0b111,
+          0b101,
+          0b111,
+          0b101,
+          0b111,
+        ],
+        '9': [
+          0b111,
+          0b101,
+          0b111,
+          0b001,
+          0b111,
+        ],
+      };
+
+      // 基于格子大小计算像素缩放，确保两位数能放在头部右下角
+      const scale = Math.max(1, Math.floor(size / 12));
+      const digitW = 3 * scale;
+      const digitH = 5 * scale;
+      const gap = Math.max(1, Math.floor(scale));
+      const margin = Math.max(1, Math.floor(size * 0.08));
+      const totalW = digitW * 2 + gap;
+      const totalH = digitH;
+
+      // 位置：相对于蛇头朝向，始终放在“右下角”
+      // 以“眼睛一侧”为上方向：
+      // UP -> 屏幕 右下角；RIGHT -> 屏幕 左下角；DOWN -> 屏幕 左上角；LEFT -> 屏幕 右上角
+      const dir = snake.getDirection();
+      let baseX = head.x;
+      let baseY = head.y;
+      if (dir === Direction.UP) {
+        baseX = head.x + size - totalW - margin;
+        baseY = head.y + size - totalH - margin;
+      } else if (dir === Direction.RIGHT) {
+        baseX = head.x + margin;
+        baseY = head.y + size - totalH - margin;
+      } else if (dir === Direction.DOWN) {
+        baseX = head.x + margin;
+        baseY = head.y + margin;
+      } else { // LEFT
+        baseX = head.x + size - totalW - margin;
+        baseY = head.y + margin;
+      }
+
+      // 防御性夹紧（理论上不需要，但以防万一）
+      if (baseX < head.x + 1) baseX = head.x + 1;
+      if (baseY < head.y + 1) baseY = head.y + 1;
+
+      // 根据蛇身颜色选择高对比度前景色（黑/白）
+      const fg = this.chooseContrastingColor(snake.getColor());
+
+      // 绘制两位数字（不使用背景块，尽量低侵入）
+      const drawDigit = (ch: string, x: number, y: number) => {
+        const pattern = DIGITS[ch];
+        if (!pattern) return;
+        ctx.fillStyle = fg;
+        for (let row = 0; row < 5; row++) {
+          const bits = pattern[row];
+          for (let col = 0; col < 3; col++) {
+            if ((bits >> (2 - col)) & 1) {
+              ctx.fillRect(x + col * scale, y + row * scale, scale, scale);
+            }
+          }
+        }
+      };
+
+      drawDigit(label[0], Math.round(baseX), Math.round(baseY));
+      drawDigit(label[1], Math.round(baseX + digitW + gap), Math.round(baseY));
+    } catch (_) {
+      // 忽略渲染错误
+    }
+  }
+
+  // 选择与底色对比度较高的颜色（黑/白）
+  private chooseContrastingColor(hex: string): string {
+    // 尝试解析 #RRGGBB 或 #RGB
+    let r = 0, g = 0, b = 0;
+    try {
+      if (hex.startsWith('#')) {
+        if (hex.length === 7) {
+          r = parseInt(hex.slice(1, 3), 16);
+          g = parseInt(hex.slice(3, 5), 16);
+          b = parseInt(hex.slice(5, 7), 16);
+        } else if (hex.length === 4) {
+          r = parseInt(hex[1] + hex[1], 16);
+          g = parseInt(hex[2] + hex[2], 16);
+          b = parseInt(hex[3] + hex[3], 16);
+        }
+      }
+    } catch {}
+    // 相对亮度（简化）
+    const luminance = (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+    return luminance > 0.6 ? '#111111' : '#FFFFFF';
   }
 
   private drawSnakeBody(

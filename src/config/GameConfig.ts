@@ -160,8 +160,8 @@ export const GameConfig = {
 
   EXECUTION: {
     CPU_TIME_LIMIT_SECONDS: 1,
-    MEMORY_LIMIT_KB: 128 * 1024,
-    WALL_TIME_LIMIT_SECONDS: 10,
+    MEMORY_LIMIT_KB: 1024 * 1024, // 1GB
+    WALL_TIME_LIMIT_SECONDS: 5,
   },
 
   // Treasure & Key System Configuration
@@ -180,7 +180,7 @@ export const GameConfig = {
     MAX_SCORE: 75,
     
     // Key mechanics
-    KEY_HOLD_TIME_LIMIT: 40, // ticks before auto-drop
+    KEY_HOLD_TIME_LIMIT: 30, // ticks before auto-drop
     MIN_TREASURE_DISTANCE: 12, // Manhattan distance between keys and treasure
     
     // Spatial constraints
@@ -207,17 +207,20 @@ export const GameConfig = {
       [GamePhase.MID]: {
         START_TICK: 81,
         END_TICK: 200,
-        SAFE_ZONE_STATE: "SHRINKING", // Two shrinking periods
+        SAFE_ZONE_STATE: "SHRINKING", // Two shrinking periods (gradual)
         SHRINK_EVENTS: [
-          { START_TICK: 81, DURATION: 20, TARGET_SIZE: { WIDTH: 32, HEIGHT: 24 } },
-          { START_TICK: 120, DURATION: 20, TARGET_SIZE: { WIDTH: 24, HEIGHT: 18 } }
+          // First shrink: 81-100 -> 34 x 26 (bounds (3,2)->(36,27))
+          { START_TICK: 81, DURATION: 20, TARGET_SIZE: { WIDTH: 34, HEIGHT: 26 } },
+          // Second shrink: 161-180 -> 26 x 20 (bounds (7,5)->(32,24))
+          { START_TICK: 161, DURATION: 20, TARGET_SIZE: { WIDTH: 26, HEIGHT: 20 } }
         ]
       },
       [GamePhase.LATE]: {
         START_TICK: 201,
         END_TICK: 256,
-        SAFE_ZONE_STATE: "SHRINKING", // Final shrinking
+        SAFE_ZONE_STATE: "SHRINKING", // Final shrinking (gradual)
         SHRINK_EVENTS: [
+          // Final shrink: 221-240 -> 20 x 16 (bounds (10,7)->(29,22))
           { START_TICK: 221, DURATION: 20, TARGET_SIZE: { WIDTH: 20, HEIGHT: 16 } }
         ]
       }

@@ -32,9 +32,12 @@ export enum GameEventType {
   // 宝箱钥匙系统事件
   TREASURE_SPAWNED = "treasure:spawned",
   TREASURE_OPENED = "treasure:opened",
+  TREASURE_REPLACED = "treasure:replaced",
   KEY_PICKED_UP = "treasure:key_picked_up",
   KEY_DROPPED = "treasure:key_dropped",
   KEY_REMOVED = "treasure:key_removed",
+  // 安全区事件
+  SAFE_ZONE_SHRINK_START = "safe_zone:shrink_start",
 }
 
 // Callback function type

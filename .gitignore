@@ -24,3 +24,5 @@ dist-ssr
 *.sw?
 
 ai_codes/
+
+.env

@@ -5,6 +5,8 @@ import { EntityFactory } from "../factories/EntityFactory";
 import { Snake } from "../entities/Snake";
 import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
 import { EntityType } from "../types/EntityType";
 import { Direction } from "../config/GameConfig";
 
@@ -427,18 +429,36 @@ export class GameReplayManager {
    * Renders a single frame of the recording
    */
   private renderFrame(frame: GameRecordingFrame): void {
+    console.log(`Rendering frame ${this.currentFrameIndex} at tick ${frame.tick}`, frame);
     // Deserialize entities from the frame
     const snakes = this.deserializeSnakes(frame.gameState.snakes);
     const foodItems = this.deserializeFoodItems(frame.gameState.foodItems);
     const obstacles = this.deserializeObstacles(frame.gameState.obstacles);
+    
+    // Deserialize treasure chests and keys if available
+    const treasureChests = frame.gameState.treasureChests 
+      ? this.deserializeTreasureChests(frame.gameState.treasureChests) 
+      : [];
+    const keys = frame.gameState.keys 
+      ? this.deserializeKeys(frame.gameState.keys) 
+      : [];
 
     // Get vortex field data for rendering (stored for future use)
     const vortexFieldData = frame.gameState.vortexField;
 
     // Render the entities
-    const renderables = [...foodItems, ...snakes];
+    const renderables = [...foodItems, ...snakes, ...treasureChests, ...keys];
     this.canvasManager.renderObstacles(obstacles);
     this.canvasManager.render(renderables);
+
+    // Render safe zone if available
+    if (frame.gameState.safeZone && frame.gameState.safeZone.enabled) {
+      this.canvasManager.renderSafeZoneFromSerialized(
+        frame.gameState.safeZone.currentBounds,
+        frame.gameState.safeZone.isWarning,
+        frame.gameState.safeZone.isShrinking
+      );
+    }
 
     // TODO: Render vortex field if active
     // This will need to be implemented in CanvasManager
@@ -526,6 +546,43 @@ export class GameReplayManager {
       obstacle.setPosition(data.position);
 
       return obstacle;
+    });
+  }
+
+  /**
+   * Deserializes treasure chest entities from serialized data
+   */
+  private deserializeTreasureChests(serializedTreasureChests: any[]): TreasureChest[] {
+    return serializedTreasureChests.map(data => {
+      // Create a treasure chest instance
+      const treasureChest = new TreasureChest(
+        data.position,
+        data.size,
+        data.score
+      );
+
+      // Set opened state if it was opened
+      if (data.isOpened) {
+        treasureChest.open();
+      }
+
+      return treasureChest;
+    });
+  }
+
+  /**
+   * Deserializes key entities from serialized data
+   */
+  private deserializeKeys(serializedKeys: any[]): Key[] {
+    return serializedKeys.map(data => {
+      // Create a key instance
+      const key = new Key(
+        data.position,
+        data.size,
+        data.id
+      );
+
+      return key;
     });
   }
 

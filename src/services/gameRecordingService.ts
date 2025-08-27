@@ -1,7 +1,8 @@
 import { GameRecording, GameRecordingFrame } from "../types/GameRecording";
 import { GameState } from "../types/GameState";
 import { User } from "../types/User";
-import { VortexFieldApiData } from "../types/VortexField";
+import { TreasureChest } from "../entities/TreasureChest";
+import { Key } from "../entities/Key";
 
 // IndexedDB database name and store name
 const DB_NAME = "SnakeGameDB";
@@ -50,7 +51,11 @@ export class GameRecordingService {
   /**
    * Start recording a new game session
    */
-  startRecording(players: User[], totalTicks: number, initialGameState?: GameState, initialVortexFieldData?: VortexFieldApiData): void {
+  startRecording(
+    players: User[], 
+    totalTicks: number, 
+    initialGameState?: GameState,
+  ): void {
     if (this.isRecording) {
       console.warn("Already recording a game session");
       return;
@@ -74,18 +79,23 @@ export class GameRecordingService {
     if (initialGameState) {
       try {
         // 创建一个深拷贝以避免引用问题
-        const stateCopy = {
-          snakes: initialGameState.snakes.map(snake => this.sanitizeObject(snake.serialize())),
-          foodItems: initialGameState.foodItems.map(food => this.sanitizeObject(food.serialize())),
-          obstacles: initialGameState.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize())),
-          vortexField: this.sanitizeObject(initialVortexFieldData || {
+        const stateCopy: any = {
+          entities: {
+            snakes: initialGameState.entities.snakes.map(snake => this.sanitizeObject(snake.serialize())),
+            foodItems: initialGameState.entities.foodItems.map(food => this.sanitizeObject(food.serialize())),
+            obstacles: initialGameState.entities.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize())),
+            treasureChests: initialGameState.entities.treasureChests?.map(chest => this.sanitizeObject(chest.serialize())) || [],
+            keys: initialGameState.entities.keys?.map(key => this.sanitizeObject(key.serialize())) || []
+          },
+          vortexField: this.sanitizeObject(initialGameState.vortexField || {
             stateCode: 0,
             param1: 0,
             param2: 0,
             param3: 0,
             param4: 0,
             param5: 0
-          })
+          }),
+          safeZone: initialGameState.safeZone ? this.sanitizeObject(initialGameState.safeZone) : undefined
         };
 
         // 添加初始帧（tick为0）
@@ -108,7 +118,10 @@ export class GameRecordingService {
   /**
    * Record a single frame (tick) of the game
    */
-  recordFrame(tick: number, gameState: GameState, vortexFieldData: VortexFieldApiData): void {
+  recordFrame(
+    tick: number, 
+    gameState: GameState,
+  ): void {
     if (!this.isRecording || !this.recording) {
       console.warn("Not currently recording");
       return;
@@ -116,11 +129,16 @@ export class GameRecordingService {
 
     try {
       // Create a deep copy of the game state to avoid reference issues
-      const stateCopy = {
-        snakes: gameState.snakes.map(snake => this.sanitizeObject(snake.serialize())),
-        foodItems: gameState.foodItems.map(food => this.sanitizeObject(food.serialize())),
-        obstacles: gameState.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize())),
-        vortexField: this.sanitizeObject(vortexFieldData)
+      const stateCopy: any = {
+        entities: {
+          snakes: gameState.entities.snakes.map(snake => this.sanitizeObject(snake.serialize())),
+          foodItems: gameState.entities.foodItems.map(food => this.sanitizeObject(food.serialize())),
+          obstacles: gameState.entities.obstacles.map(obstacle => this.sanitizeObject(obstacle.serialize())),
+          treasureChests: gameState.entities.treasureChests?.map(chest => this.sanitizeObject(chest.serialize())) || [],
+          keys: gameState.entities.keys?.map(key => this.sanitizeObject(key.serialize())) || []
+        },
+        vortexField: this.sanitizeObject(gameState.vortexField),
+        safeZone: gameState.safeZone ? this.sanitizeObject(gameState.safeZone) : undefined
       };
 
       const frame: GameRecordingFrame = {
@@ -309,7 +327,10 @@ export class GameRecordingService {
         snakes: frame.gameState.snakes,
         foodItems: frame.gameState.foodItems,
         obstacles: frame.gameState.obstacles,
-        vortexField: frame.gameState.vortexField
+        vortexField: frame.gameState.vortexField,
+        ...(frame.gameState.treasureChests && { treasureChests: frame.gameState.treasureChests }),
+        ...(frame.gameState.keys && { keys: frame.gameState.keys }),
+        ...(frame.gameState.safeZone && { safeZone: frame.gameState.safeZone })
       }
     }));
   }

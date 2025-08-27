@@ -14,18 +14,23 @@
       <div class="menu-container">
         <router-link to="/game" class="menu-button">
           <div class="pixel-icon game-icon"></div>
-          <span>开始游戏</span>
+          <span>开始对局</span>
         </router-link>
 
-        <router-link to="/submit" class="menu-button snake-button">
+        <router-link to="/submit" class="menu-button">
           <div class="pixel-icon code-icon"></div>
-          <span>提交蛇王算法</span>
+          <span>提交算法</span>
         </router-link>
 
-        <button @click="handleLogout" class="menu-button">
-          <div class="pixel-icon logout-icon"></div>
-          <span>退出登录</span>
-        </button>
+        <router-link to="/recordings" class="menu-button">
+          <div class="pixel-icon battle-icon"></div>
+          <span>查看回放</span>
+        </router-link>
+
+        <router-link to="/rules" class="menu-button snake-button">
+          <div class="pixel-icon docs-icon"></div>
+          <span>查看文档</span>
+        </router-link>
       </div>
     </div>
   </div>
@@ -33,18 +38,11 @@
 
 <script setup lang="ts">
 import { computed } from 'vue';
-import { useRouter } from 'vue-router';
 import { useAuth } from '../stores/auth';
 
-const router = useRouter();
-const { state, logout } = useAuth();
+const { state } = useAuth();
 
 const nickname = computed(() => state.user?.nickname || '玩家');
-
-const handleLogout = async () => {
-  await logout();
-  router.push('/login');
-};
 </script>
 
 <style scoped>
@@ -151,28 +149,36 @@ const handleLogout = async () => {
   image-rendering: pixelated;
 }
 
+/* 开始对局 - 抽象八边形 */
 .game-icon {
   background-color: var(--accent-color);
   clip-path: polygon(
-    0% 25%, 25% 25%, 25% 0%, 75% 0%,
-    75% 25%, 100% 25%, 100% 75%, 75% 75%,
-    75% 100%, 25% 100%, 25% 75%, 0% 75%
+    25% 8%, 75% 8%, 92% 25%, 92% 75%,
+    75% 92%, 25% 92%, 8% 75%, 8% 25%
   );
 }
 
+/* 提交算法 - 抽象箭头方块 */
 .code-icon {
   background-color: var(--accent-color);
   clip-path: polygon(
-    0% 0%, 100% 0%, 100% 75%, 75% 75%,
-    75% 100%, 50% 75%, 0% 75%
+    8% 8%, 70% 8%, 92% 50%, 70% 92%, 8% 92%, 30% 50%
   );
 }
 
+/* 查看回放 - 抽象播放形状 */
 .battle-icon {
   background-color: var(--accent-color);
   clip-path: polygon(
-    50% 0%, 100% 25%, 100% 75%, 50% 100%,
-    0% 75%, 0% 25%
+    15% 8%, 85% 50%, 15% 92%
+  );
+}
+
+/* 查看文档 - 抽象折角方块 */
+.docs-icon {
+  background-color: var(--accent-color);
+  clip-path: polygon(
+    8% 8%, 70% 8%, 92% 30%, 92% 92%, 8% 92%
   );
 }
 
@@ -183,6 +189,8 @@ const handleLogout = async () => {
     75% 100%, 75% 75%, 0% 75%
   );
 }
+
+/* 保留其它图标样式不变 */
 
 /* 响应式布局 */
 @media (max-width: 600px) {

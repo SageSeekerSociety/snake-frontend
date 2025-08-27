@@ -69,7 +69,7 @@ function createRiskMap(snake: Snake, gameState: GameState): Map<string, number> 
   }
   
   // 障碍物风险
-  for (const obstacle of gameState.obstacles) {
+  for (const obstacle of gameState.entities.obstacles) {
     const pos = obstacle.getPosition();
     riskMap.set(`${pos.x},${pos.y}`, 100);
     
@@ -89,7 +89,7 @@ function createRiskMap(snake: Snake, gameState: GameState): Map<string, number> 
   }
   
   // 陷阱食物风险处理
-  for (const food of gameState.foodItems) {
+  for (const food of gameState.entities.foodItems) {
     if (food.getType() === FoodType.TRAP) {
       const pos = food.getPosition();
       const key = `${pos.x},${pos.y}`;
@@ -113,7 +113,7 @@ function createRiskMap(snake: Snake, gameState: GameState): Map<string, number> 
   }
   
   // 其他蛇身体的风险
-  for (const otherSnake of gameState.snakes) {
+  for (const otherSnake of gameState.entities.snakes) {
     if (!otherSnake.isAlive()) continue;
     
     const body = otherSnake.getBody();
@@ -153,7 +153,7 @@ function evaluateTargets(snake: Snake, gameState: GameState, riskMap: Map<string
   const boxSize = GameConfig.CANVAS.BOX_SIZE;
   
   // 评估食物
-  for (const food of gameState.foodItems) {
+  for (const food of gameState.entities.foodItems) {
     const pos = food.getPosition();
     const key = `${pos.x},${pos.y}`;
     const risk = riskMap.get(key) || 0;
@@ -189,7 +189,7 @@ function evaluateTargets(snake: Snake, gameState: GameState, riskMap: Map<string
     
     // 检查路径上是否有陷阱食物
     let trapProximityPenalty = 1.0;
-    for (const trapFood of gameState.foodItems) {
+    for (const trapFood of gameState.entities.foodItems) {
       if (trapFood.getType() === FoodType.TRAP) {
         const trapPos = trapFood.getPosition();
         
@@ -315,7 +315,7 @@ function findPathAStar(
       
       // 检查节点是否是陷阱
       let isTrap = false;
-      for (const food of gameState.foodItems) {
+      for (const food of gameState.entities.foodItems) {
         if (food.getType() === FoodType.TRAP) {
           const pos = food.getPosition();
           if (pos.x === neighbor.x && pos.y === neighbor.y) {
@@ -330,7 +330,7 @@ function findPathAStar(
       
       // 检查该位置是否有其他蛇的身体
       let hasSnakeBody = false;
-      for (const otherSnake of gameState.snakes) {
+      for (const otherSnake of gameState.entities.snakes) {
         if (!otherSnake.isAlive()) continue;
         
         const body = otherSnake.getBody();
@@ -357,7 +357,7 @@ function findPathAStar(
       
       // 预测其他蛇的移动
       let potentialCollision = false;
-      for (const otherSnake of gameState.snakes) {
+      for (const otherSnake of gameState.entities.snakes) {
         if (otherSnake === snake || !otherSnake.isAlive()) continue;
         
         const otherHead = otherSnake.getBody()[0];
@@ -466,7 +466,7 @@ function defensiveMove(snake: Snake, gameState: GameState, riskMap: Map<string, 
     
     // 检查是否是陷阱
     let isTrap = false;
-    for (const food of gameState.foodItems) {
+    for (const food of gameState.entities.foodItems) {
       if (food.getType() === FoodType.TRAP) {
         const pos = food.getPosition();
         if (pos.x === move.x && pos.y === move.y) {
@@ -477,7 +477,7 @@ function defensiveMove(snake: Snake, gameState: GameState, riskMap: Map<string, 
     }
     
     // 检查与其他蛇的潜在碰撞
-    for (const otherSnake of gameState.snakes) {
+    for (const otherSnake of gameState.entities.snakes) {
       if (otherSnake === snake || !otherSnake.isAlive()) continue;
       
       const otherHead = otherSnake.getBody()[0];
@@ -542,7 +542,7 @@ function shouldUseShield(snake: Snake, gameState: GameState): boolean {
   const boxSize = GameConfig.CANVAS.BOX_SIZE;
   
   // 检查是否有蛇在附近
-  for (const otherSnake of gameState.snakes) {
+  for (const otherSnake of gameState.entities.snakes) {
     if (otherSnake === snake || !otherSnake.isAlive()) continue;
     
     const otherHead = otherSnake.getBody()[0];

@@ -20,9 +20,8 @@
             游戏开始后将显示通知...
           </div>
           <div v-else class="notification-items">
-            <div v-for="(notification, index) in notifications" :key="index"
-                class="notification-item"
-                v-html="notification">
+            <div v-for="(notification, index) in notifications" :key="index" class="notification-item"
+              v-html="notification">
             </div>
           </div>
         </div>
@@ -36,10 +35,11 @@
           <div class="panel-title">计分板</div>
         </div>
         <div class="score-list">
-          <div v-for="snake in sortedSnakes" :key="snake.snake.getId()"
-            class="score-item"
+          <div v-for="snake in sortedSnakes" :key="snake.snake.getId()" class="score-item"
             :class="{ 'player-dead': !snake.snake.isAlive() }">
-            <div class="score-color" :style="{ backgroundColor: snake.snake.getColor() }"></div>
+            <div class="score-color" :style="{ backgroundColor: snake.snake.getColor() }">
+              <span class="score-color-number">{{ getMatchNumber(snake.snake, snake.index) }}</span>
+            </div>
             <div class="score-info">
               <div class="score-name">
                 {{ getSnakeName(snake) }}
@@ -70,11 +70,7 @@
     </div>
 
     <!-- Game Rankings Modal -->
-    <GameRankings
-      :show="showFinalRankings"
-      :scores="finalScores"
-      @close="closeFinalRankings"
-    />
+    <GameRankings :show="showFinalRankings" :scores="finalScores" @close="closeFinalRankings" />
   </div>
 </template>
 
@@ -109,14 +105,23 @@ const showFinalRankings = ref<boolean>(false);
 const finalScores = ref<FinalScore[]>([]);
 
 const sortedSnakes = computed(() => {
-  // 返回带有原始索引的蛇数组，按分数排序
   return snakes.value.map((snake, index) => ({
     snake,
     index
-  })).sort((a, b) => b.snake.getScore() - a.snake.getScore());
+  })).sort((a, b) => b.snake.getScore() - a.snake.getScore()) as { snake: Snake; index: number; }[];
 });
 
-// 不再需要头像颜色生成函数，因为我们使用了真实的头像图片
+// 获取对局编号（从1开始，补全两位）
+const getMatchNumber = (snake: Snake, fallbackIndex: number): string => {
+  try {
+    const meta: any = snake.getMetadata?.() || {};
+    const n = meta.matchNumber as number | undefined;
+    const num = typeof n === 'number' && n > 0 ? n : (fallbackIndex + 1);
+    return String(num).padStart(2, '0');
+  } catch {
+    return String(fallbackIndex + 1).padStart(2, '0');
+  }
+};
 
 // 获取蛇的显示名称
 const getSnakeName = (snakeData: any) => {
@@ -245,7 +250,6 @@ const setupEventListeners = () => {
   eventBus.on(GameEventType.GAME_START, handleGameStart);
   eventBus.on(GameEventType.UI_UPDATE_TIMER, updateRemainingTicks);
   eventBus.on(GameEventType.UI_FINAL_SCORES, handleFinalScores);
-  eventBus.on(GameEventType.GAME_OVER, resetState);
 
   // Return cleanup function
   return () => {
@@ -370,7 +374,8 @@ onMounted(() => {
 
 .notification-items {
   display: flex;
-  flex-direction: column-reverse; /* 最新的通知在最上面 */
+  flex-direction: column-reverse;
+  /* 最新的通知在最上面 */
   gap: 8px;
 }
 
@@ -425,15 +430,28 @@ onMounted(() => {
 }
 
 .score-color {
-  width: 12px;
+  position: relative;
+  width: 18px;
   height: 40px;
   border: 2px solid rgba(255, 255, 255, 0.3);
   flex-shrink: 0;
 }
 
+.score-color-number {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 12px;
+  font-weight: bold;
+  color: #0b0b0b;
+  text-shadow: 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
 .score-info {
   flex: 1;
-  min-width: 0; /* 确保flex项可以缩小到比内容更小 */
+  min-width: 0;
+  /* 确保flex项可以缩小到比内容更小 */
   overflow: hidden;
 }
 
@@ -530,18 +548,22 @@ onMounted(() => {
     gap: 10px;
   }
 
-  .left-panel, .right-panel {
+  .left-panel,
+  .right-panel {
     width: 100%;
     max-width: 600px;
   }
 
-  .score-list, .notifications-list {
+  .score-list,
+  .notifications-list {
     max-height: 300px;
   }
 }
 
 @media (max-width: 768px) {
-  .left-panel, .right-panel {
+
+  .left-panel,
+  .right-panel {
     max-width: 100%;
   }
 

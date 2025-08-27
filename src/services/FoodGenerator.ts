@@ -6,6 +6,17 @@ import { EntityFactory } from "../factories/EntityFactory"; // Adjust path as ne
 import { Snake } from "../entities/Snake"; // Adjust path as needed
 import { VortexFieldManager } from "../managers/VortexFieldManager";
 import { SafeZoneManager } from "../managers/SafeZoneManager";
+import { SafeZoneBounds } from "../types/GameState";
+
+/**
+ * Sampling area bounds in pixel coordinates
+ */
+interface SamplingBounds {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
 
 /**
  * Service responsible for generating food items using a phased, dynamic approach
@@ -43,21 +54,29 @@ export class FoodGenerator {
   /**
    * Generates initial food items at the start of the game.
    * Uses early game settings and Poisson Disk Sampling for good distribution.
-   * API remains the same.
+   * Now generates candidates directly within safe zone bounds for better efficiency.
    * @param count - Desired number of initial food items.
    */
   generateInitialFood(count: number): Food[] {
       const initialFood: Food[] = [];
       const phase = GamePhase.EARLY;
 
-      // Generate a pool of potential locations using Poisson Disk
-      const potentialPositions = this._runPoissonDiskSampling(this.minDistance, this.poissonK);
+      // Get safe zone bounds and convert to sampling area
+      const samplingBounds = this.getSafeZoneSamplingBounds();
+      if (!samplingBounds) {
+          console.warn('[FoodGenerator] No valid safe zone bounds, skipping initial food generation');
+          return initialFood;
+      }
+
+      // Generate a pool of potential locations using Poisson Disk within safe zone
+      const potentialPositions = this._runPoissonDiskSampling(this.minDistance, this.poissonK, samplingBounds);
       this._shuffleArray(potentialPositions); // Ensure random order
 
       let foodPlaced = 0;
       let poolIndex = 0;
 
       // Place food from the pool until count is reached or pool is exhausted
+      // No need to check isPositionInSafeZone since all positions are already within safe zone
       while (foodPlaced < count && poolIndex < potentialPositions.length) {
           const position = potentialPositions[poolIndex++];
           const typeToGen = this.getRandomFoodType(phase);
@@ -65,15 +84,12 @@ export class FoodGenerator {
           const color = this.getFoodColor(typeToGen, value);
           const ttl = this.getFoodTTL(typeToGen);
 
-          // Basic bounds check and safe zone check
-          if (position.x >= 0 && position.x < this.mapWidth && position.y >= 0 && position.y < this.mapHeight) {
-              // Check if the position is occupied by obstacles and in safe zone
-              if (!this.entityManager.isPositionOccupied(position, ['obstacle']) && this.isPositionInSafeZone(position)) {
-                  const food = this.entityFactory.createFood(position, typeToGen, value, color, ttl);
-                  if (food) {
-                      initialFood.push(food);
-                      foodPlaced++;
-                  }
+          // Check for occupation by obstacles, treasure chests, and keys (safe zone check is already handled by sampling bounds)
+          if (!this.entityManager.isPositionOccupied(position, ['obstacle', 'treasure_chest', 'key'])) {
+              const food = this.entityFactory.createFood(position, typeToGen, value, color, ttl);
+              if (food) {
+                  initialFood.push(food);
+                  foodPlaced++;
               }
           }
       }
@@ -84,7 +100,6 @@ export class FoodGenerator {
   /**
    * Periodically attempts to generate new food items based on game phase,
    * dynamic targets, using Poisson Disk Sampling for candidates and dynamic checks.
-   * API remains the same.
    * @param currentTick - The current game tick count.
    * @returns An array of newly generated food items (can be empty).
    */
@@ -118,9 +133,16 @@ export class FoodGenerator {
     const maxBurst = GameConfig.FOOD_ADV.MAX_BURST_PER_PERIOD;
     let generatedCountThisPeriod = 0;
 
+    // Get safe zone bounds and convert to sampling area
+    const samplingBounds = this.getSafeZoneSamplingBounds();
+    if (!samplingBounds) {
+        console.warn('[FoodGenerator] No valid safe zone bounds, skipping periodic food generation');
+        return newFood;
+    }
+
     // Generate candidate positions - slightly more than potentially needed
     const numCandidatesToGenerate = maxBurst * GameConfig.FOOD_ADV.PLACEMENT_ATTEMPTS_FROM_POOL + 5;
-    const potentialPositions = this._runPoissonDiskSampling(this.minDistance, this.poissonK, numCandidatesToGenerate);
+    const potentialPositions = this._runPoissonDiskSampling(this.minDistance, this.poissonK, samplingBounds, numCandidatesToGenerate);
     this._shuffleArray(potentialPositions); // Randomize order
 
     let potentialPositionIndex = 0;
@@ -211,25 +233,36 @@ export class FoodGenerator {
   /**
    * Generates a set of points using Poisson Disk Sampling (Bridson's Algorithm).
    * Ensures points are at least `minDistance` apart.
+   * Can optionally sample within specified bounds instead of the full map.
    */
-  private _runPoissonDiskSampling(minDistance: number, k: number, maxSamples: number = Infinity): Vec2[] {
+  private _runPoissonDiskSampling(minDistance: number, k: number, samplingBounds?: SamplingBounds, maxSamples: number = Infinity): Vec2[] {
+      // Use sampling bounds if provided, otherwise use full map
+      const boundsX = samplingBounds?.x ?? 0;
+      const boundsY = samplingBounds?.y ?? 0;
+      const boundsWidth = samplingBounds?.width ?? this.mapWidth;
+      const boundsHeight = samplingBounds?.height ?? this.mapHeight;
+      const boundsMaxX = boundsX + boundsWidth;
+      const boundsMaxY = boundsY + boundsHeight;
+
       const samples: Vec2[] = [];
       const activeList: number[] = []; // Stores indices into the samples array
       const grid: (number | undefined)[] = new Array(this.poissonGridWidth * this.poissonGridHeight).fill(undefined);
       const cellSize = this.poissonCellSize;
       const minDistanceSq = minDistance * minDistance;
 
-      // Start with a random point
+      // Start with a random point within the sampling bounds
       if (samples.length === 0 && maxSamples > 0) {
-          const initialX = Math.random() * this.mapWidth;
-          const initialY = Math.random() * this.mapHeight;
+          const initialX = boundsX + Math.random() * boundsWidth;
+          const initialY = boundsY + Math.random() * boundsHeight;
           const initialSample = { x: initialX, y: initialY };
           const initialIndex = 0;
           samples.push(initialSample);
           activeList.push(initialIndex);
           const gridX = Math.floor(initialX / cellSize);
           const gridY = Math.floor(initialY / cellSize);
-          grid[gridX + gridY * this.poissonGridWidth] = initialIndex;
+          if (gridX >= 0 && gridX < this.poissonGridWidth && gridY >= 0 && gridY < this.poissonGridHeight) {
+              grid[gridX + gridY * this.poissonGridWidth] = initialIndex;
+          }
       }
 
       // Process the active list
@@ -247,8 +280,8 @@ export class FoodGenerator {
               const candidateY = activeSample.y + Math.sin(angle) * radius;
               const candidate: Vec2 = { x: candidateX, y: candidateY };
 
-              // Check if candidate is within map bounds
-              if (candidateX >= 0 && candidateX < this.mapWidth && candidateY >= 0 && candidateY < this.mapHeight) {
+              // Check if candidate is within sampling bounds
+              if (candidateX >= boundsX && candidateX < boundsMaxX && candidateY >= boundsY && candidateY < boundsMaxY) {
                   const candidateGridX = Math.floor(candidateX / cellSize);
                   const candidateGridY = Math.floor(candidateY / cellSize);
                   let isFarEnough = true;
@@ -463,14 +496,15 @@ export class FoodGenerator {
 
   /**
    * Performs dynamic checks for a placement position against live snakes.
-   * Checks for occupation by body/head, proximity to heads, and safe zone constraints.
+   * Checks for occupation by body/head, obstacles, treasure chests, keys and proximity to heads.
+   * Safe zone check is no longer needed since positions are pre-filtered by sampling bounds.
    */
   private _isValidPlacementDynamicCheck(position: Position, liveSnakes: Snake[]): boolean {
-     // Check if the exact cell is occupied by a snake part or obstacle
+     // Check if the exact cell is occupied by a snake part, obstacle, treasure chest, or key
      const itemsInCell = this.entityManager.findNearbyGridItems(position, 0);
       for (const item of itemsInCell) {
           if (item.position.x === position.x && item.position.y === position.y) {
-              if (item.type === "snake" || item.type === "obstacle") {
+              if (item.type === "snake" || item.type === "obstacle" || item.type === "treasure_chest" || item.type === "key") {
                  return false; // Blocked
               }
           }
@@ -481,11 +515,7 @@ export class FoodGenerator {
           return false; // Too close to a head
       }
 
-      // Check if position is within safe zone
-      if (!this.isPositionInSafeZone(position)) {
-          return false; // Outside safe zone
-      }
-
+      // Safe zone check removed - all positions are already within safe zone bounds
       return true; // Position is valid dynamically
   }
 
@@ -534,7 +564,46 @@ export class FoodGenerator {
    }
 
    /**
+    * Gets the current safe zone bounds as sampling area in pixel coordinates.
+    * Returns null if safe zone is disabled or has invalid bounds.
+    */
+   private getSafeZoneSamplingBounds(): SamplingBounds | null {
+       if (!this.safeZoneManager) {
+           // If no safe zone manager, use full map as sampling area
+           return {
+               x: 0,
+               y: 0,
+               width: this.mapWidth,
+               height: this.mapHeight
+           };
+       }
+
+       const safeZoneBounds = this.safeZoneManager.getCurrentBounds();
+       
+       // Convert grid coordinates to pixel coordinates
+       const pixelX = safeZoneBounds.xMin * this.boxSize;
+       const pixelY = safeZoneBounds.yMin * this.boxSize;
+       const pixelWidth = (safeZoneBounds.xMax - safeZoneBounds.xMin + 1) * this.boxSize;
+       const pixelHeight = (safeZoneBounds.yMax - safeZoneBounds.yMin + 1) * this.boxSize;
+       
+       // Validate bounds
+       if (pixelWidth <= 0 || pixelHeight <= 0) {
+           console.warn('[FoodGenerator] Invalid safe zone bounds:', safeZoneBounds);
+           return null;
+       }
+       
+       return {
+           x: pixelX,
+           y: pixelY,
+           width: pixelWidth,
+           height: pixelHeight
+       };
+   }
+
+   /**
     * Checks if a position is within the current safe zone
+    * @deprecated This method is kept for compatibility but should no longer be needed
+    * since positions are now pre-filtered by sampling bounds
     */
    private isPositionInSafeZone(position: Position): boolean {
        if (!this.safeZoneManager) {
@@ -543,5 +612,6 @@ export class FoodGenerator {
        
        return this.safeZoneManager.isPositionSafe(position);
    }
+
 
 } // End of FoodGenerator class

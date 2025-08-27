@@ -64,6 +64,33 @@ export interface SerializedKey {
   entityType: EntityType;
 }
 
+// 序列化的安全区状态
+export interface SerializedSafeZone {
+  enabled: boolean;
+  currentBounds: {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  };
+  isWarning: boolean;
+  isShrinking: boolean;
+  nextShrinkTick?: number;
+  nextTargetBounds?: {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  };
+  finalShrinkTick?: number;
+  finalTargetBounds?: {
+    xMin: number;
+    xMax: number;
+    yMin: number;
+    yMax: number;
+  };
+}
+
 // 录制帧中的游戏状态（序列化后的数据）
 export interface RecordingGameState {
   foodItems: SerializedFood[];
@@ -72,6 +99,7 @@ export interface RecordingGameState {
   vortexField: VortexFieldApiData;
   treasureChests?: SerializedTreasureChest[];
   keys?: SerializedKey[];
+  safeZone?: SerializedSafeZone;
 }
 
 /**

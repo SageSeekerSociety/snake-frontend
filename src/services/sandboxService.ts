@@ -5,6 +5,7 @@ import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
 import { TreasureChest } from "../entities/TreasureChest";
 import { Key } from "../entities/Key";
+import { SafeZoneAlgorithmInfo } from "../types/GameState";
 import { User, PlayersResponse } from "../types/User";
 import { VortexFieldApiData } from "../types/VortexField";
 import { SSE } from "sse.js";
@@ -36,9 +37,10 @@ export const sandboxService = {
    * Submits source code for compilation.
    * This is the first step in the compilation flow.
    * @param file The source code file to compile.
+   * @param onProgress Optional callback to track upload progress.
    * @returns A promise resolving with the job ID if submission is accepted.
    */
-  submitCode: async (file: File): Promise<string> => {
+  submitCode: async (file: File, onProgress?: (progressPercent: number) => void): Promise<string> => {
     const formData = new FormData();
     formData.append("sourceFile", file);
 
@@ -47,6 +49,12 @@ export const sandboxService = {
       formData,
       {
         headers: { "Content-Type": "multipart/form-data" },
+        onUploadProgress: (progressEvent) => {
+          if (onProgress && progressEvent.total) {
+            const percentCompleted = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+            onProgress(percentCompleted);
+          }
+        },
       }
     );
 
@@ -62,16 +70,18 @@ export const sandboxService = {
    * @param file The source code file.
    * @param onEvent Callback for each received SSE event.
    * @param onError Callback for any connection or submission error.
+   * @param onProgress Optional callback to track upload progress.
    * @returns A promise that resolves to the SSE instance for manual control (e.g., `close()`), or null if submission fails.
    */
   submitCodeWithSSE: async (
     file: File,
     onEvent: (eventData: SseEventData) => void,
-    onError: (error: any) => void
+    onError: (error: any) => void,
+    onProgress?: (progressPercent: number) => void
   ): Promise<SSE | null> => {
     try {
       // Step 1: Submit the code via a standard REST call.
-      const jobId = await sandboxService.submitCode(file);
+      const jobId = await sandboxService.submitCode(file, onProgress);
       console.log(`Submission successful. Job ID: ${jobId}`);
 
       // Step 2: If submission is successful, connect to the SSE stream.
@@ -308,7 +318,8 @@ export const formatGameStateForAPI = (
   snakes: Snake[],
   vortexData?: VortexFieldApiData,
   treasureChests: TreasureChest[] = [],
-  keys: Key[] = []
+  keys: Key[] = [],
+  safeZoneInfo?: SafeZoneAlgorithmInfo
 ): string => {
   let input = `${remainingTicks}\n`;
 
@@ -429,6 +440,36 @@ export const formatGameStateForAPI = (
   heldKeysData.forEach((keyData) => {
     input += `${keyData.y} ${keyData.x} ${keyData.studentId} ${keyData.remainingTime}\n`;
   });
+
+  // 添加安全区信息块（三层信息）
+  if (safeZoneInfo) {
+    // 第一行：当前安全区边界 (Current State)
+    const current = safeZoneInfo.currentBounds;
+    input += `${current.xMin} ${current.yMin} ${current.xMax} ${current.yMax}\n`;
+
+    // 第二行：下次跳变信息 (Imminent Warning)
+    if (safeZoneInfo.nextShrinkEvent) {
+      const next = safeZoneInfo.nextShrinkEvent;
+      input += `${next.startTick} ${next.targetBounds.xMin} ${next.targetBounds.yMin} ${next.targetBounds.xMax} ${next.targetBounds.yMax}\n`;
+    } else {
+      // 没有下次跳变，输出-1表示无跳变
+      input += `-1 ${current.xMin} ${current.yMin} ${current.xMax} ${current.yMax}\n`;
+    }
+
+    // 第三行：最终目标信息 (Final Destination)
+    if (safeZoneInfo.finalShrinkEvent) {
+      const final = safeZoneInfo.finalShrinkEvent;
+      input += `${final.startTick} ${final.targetBounds.xMin} ${final.targetBounds.yMin} ${final.targetBounds.xMax} ${final.targetBounds.yMax}\n`;
+    } else {
+      // 没有最终目标，输出-1表示无最终收缩
+      input += `-1 ${current.xMin} ${current.yMin} ${current.xMax} ${current.yMax}\n`;
+    }
+  } else {
+    // 兼容性：如果没有安全区信息，输出默认值
+    input += `0 0 39 29\n`; // 当前边界
+    input += `-1 0 0 39 29\n`; // 无下次跳变
+    input += `-1 0 0 39 29\n`; // 无最终目标
+  }
 
   // console.log(input);
 

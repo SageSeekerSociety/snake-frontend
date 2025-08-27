@@ -5,11 +5,12 @@ import { TreasureChest } from "../entities/TreasureChest";
 import { Key } from "../entities/Key";
 import { GridItem, SpatialHashGrid } from "../core/SpatialHashGrid";
 import { Position } from "../types/Position";
-import { GameState } from "../types/GameState";
+import { EntityState, GameState } from "../types/GameState";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { EntityFactory } from "../factories/EntityFactory"; // Import EntityFactory
-import { FoodType } from "../config/GameConfig";
+import { FoodType, GameConfig } from "../config/GameConfig";
 import { IEntityQuery, IScoreMultiplierProvider } from "../interfaces/EntityQuery";
+import { SafeZoneBounds } from "../types/GameState";
 
 type EntityMapKey = Snake | Food | Obstacle | TreasureChest | Key | Position; // Position used for snake segments
 
@@ -34,6 +35,10 @@ export class EntityManager implements IEntityQuery {
     snake: Snake;
     reason: string;
   }) => void;
+  private boundHandleSafeZoneShrink: (data: {
+    previousBounds: SafeZoneBounds;
+    currentBounds: SafeZoneBounds;
+  }) => void;
 
   constructor(spatialGrid: SpatialHashGrid, entityFactory: EntityFactory, scoreMultiplierProvider?: IScoreMultiplierProvider) {
     this.spatialGrid = spatialGrid;
@@ -43,6 +48,7 @@ export class EntityManager implements IEntityQuery {
     // Bind event handlers and store references for later cleanup
     this.boundHandleSnakeDeathCleanup = this.handleSnakeDeathCleanup.bind(this);
     this.boundHandleSnakeKillRequest = this.handleSnakeKillRequest.bind(this);
+    this.boundHandleSafeZoneShrink = this.handleSafeZoneShrink.bind(this);
 
     // Listen for snake death animation completion to handle final cleanup
     eventBus.on(
@@ -55,6 +61,12 @@ export class EntityManager implements IEntityQuery {
       GameEventType.SNAKE_KILL_REQUEST,
       this.boundHandleSnakeKillRequest
     );
+
+    // Listen for safe zone shrink events to clean up food outside safe zone
+    eventBus.on(
+      GameEventType.SAFE_ZONE_SHRINK_START,
+      this.boundHandleSafeZoneShrink
+    );
   }
 
   /**
@@ -63,6 +75,55 @@ export class EntityManager implements IEntityQuery {
   private handleSnakeKillRequest(data: { snake: Snake; reason: string }): void {
     if (data && data.snake && data.reason) {
       this.killSnake(data.snake, data.reason);
+    }
+  }
+
+  /**
+   * Handles safe zone shrink events by cleaning up food outside the current safe zone.
+   * This is called when the safe zone bounds actually change during shrinking.
+   */
+  private handleSafeZoneShrink(data: { previousBounds: SafeZoneBounds; currentBounds: SafeZoneBounds }): void {
+    if (!data || !data.currentBounds) {
+      console.warn('[EntityManager] Invalid safe zone shrink data');
+      return;
+    }
+
+    const boxSize = GameConfig.CANVAS.BOX_SIZE;
+    let cleanedUpCount = 0;
+
+    // Create a temporary array to avoid modification during iteration
+    const foodToCleanup: Food[] = [];
+
+    // Check each food item and mark for removal if outside current safe zone
+    for (const food of this.foodItems) {
+      const position = food.getPosition();
+      const gridX = Math.floor(position.x / boxSize);
+      const gridY = Math.floor(position.y / boxSize);
+
+      // Check if food is outside the current safe zone bounds
+      const isOutsideCurrentZone = (
+        gridX < data.currentBounds.xMin ||
+        gridX > data.currentBounds.xMax ||
+        gridY < data.currentBounds.yMin ||
+        gridY > data.currentBounds.yMax
+      );
+
+      if (isOutsideCurrentZone) {
+        foodToCleanup.push(food);
+        console.log(`[EntityManager] Marking ${food.getType()} food for cleanup at (${gridX}, ${gridY}) - outside current bounds`);
+      }
+    }
+
+    // Remove all marked food items
+    for (const food of foodToCleanup) {
+      console.log(`[EntityManager] Removing food at (${Math.floor(food.getPosition().x / boxSize)}, ${Math.floor(food.getPosition().y / boxSize)})`);
+      this.removeFood(food);
+      cleanedUpCount++;
+    }
+
+    if (cleanedUpCount > 0) {
+      console.log(`[EntityManager] Successfully cleaned up ${cleanedUpCount} food items outside current safe zone`);
+      console.log(`[EntityManager] Current safe zone bounds: (${data.currentBounds.xMin}, ${data.currentBounds.yMin}) to (${data.currentBounds.xMax}, ${data.currentBounds.yMax})`);
     }
   }
 
@@ -92,7 +153,7 @@ export class EntityManager implements IEntityQuery {
     return this.keys;
   }
 
-  getGameState(): GameState {
+  getEntityState(): EntityState {
     // Return copies to prevent external modification
     return {
       snakes: [...this.snakes],
@@ -190,7 +251,7 @@ export class EntityManager implements IEntityQuery {
     
     switch (food.getType()) {
       case FoodType.GROWTH:
-        snake.addGrowth(2); // Assuming growth value is fixed here
+        snake.addGrowth(2);
         break;
       case FoodType.TRAP:
         const trapScore = -10 * vortexMultiplier; // Apply multiplier to trap penalty
@@ -292,7 +353,7 @@ export class EntityManager implements IEntityQuery {
   /**
    * Gathers decisions from all living snakes.
    * Handles potential async operations like API calls.
-   * @param gameState - The current game state.
+   * @param gameState - The complete game state.
    * @returns A promise that resolves when all decisions are made.
    */
   async getAllSnakeDecisions(gameState: GameState): Promise<void> {

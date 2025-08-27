@@ -5,8 +5,9 @@ declare global {
   interface Window {
     // 定义 runtimeConfig 对象的结构和类型
     runtimeConfig: {
-      VITE_API_URL: string;
-      VITE_SANDBOX_URL: string;
+      VITE_API_URL?: string;
+      VITE_SANDBOX_URL?: string;
+      ENABLE_USERNAME_LOGIN?: boolean;
     };
   }
 }

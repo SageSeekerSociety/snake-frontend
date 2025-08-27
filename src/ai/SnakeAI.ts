@@ -45,7 +45,7 @@ function findNearestFood(snake: Snake, gameState: GameState): Food | null {
   let minDist = Infinity;
   let nearestFood: Food | null = null;
 
-  for (const food of gameState.foodItems) {
+  for (const food of gameState.entities.foodItems) {
     if (food.getType() === FoodType.TRAP) continue;
 
     const foodPos = food.getPosition();
@@ -71,7 +71,7 @@ function findBestFood(snake: Snake, gameState: GameState): Food | null {
   let maxScoreRatio = -Infinity;
   let bestFood: Food | null = null;
 
-  for (const food of gameState.foodItems) {
+  for (const food of gameState.entities.foodItems) {
     const foodPos = food.getPosition();
     const dist = Math.abs(head.x - foodPos.x) + Math.abs(head.y - foodPos.y);
     let score: number;
@@ -216,7 +216,7 @@ function isValidMove(
 
   // 检查是否与障碍物碰撞
   if (
-    gameState.obstacles.some(
+    gameState.entities.obstacles.some(
       (obstacle) =>
         obstacle.getPosition().x === pos.x && obstacle.getPosition().y === pos.y
     )
@@ -225,7 +225,7 @@ function isValidMove(
   }
 
   // 检查是否与蛇身碰撞
-  for (const otherSnake of gameState.snakes) {
+  for (const otherSnake of gameState.entities.snakes) {
     if (!otherSnake.isAlive()) continue;
 
     const body = otherSnake.getBody();

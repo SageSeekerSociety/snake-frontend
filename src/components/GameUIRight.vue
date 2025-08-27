@@ -9,7 +9,9 @@
         <div v-for="snake in sortedSnakes" :key="snake.snake.getId()"
           class="score-item"
           :class="{ 'player-dead': !snake.snake.isAlive() }">
-          <div class="score-color" :style="{ backgroundColor: snake.snake.getColor() }"></div>
+          <div class="score-color" :style="{ backgroundColor: snake.snake.getColor() }">
+            <span class="score-color-number">{{ getMatchNumber(snake.snake, snake.index) }}</span>
+          </div>
           <div class="score-info">
             <div class="score-name">
               {{ getSnakeName(snake) }}
@@ -58,6 +60,18 @@ const sortedSnakes = computed(() => {
     index
   })).sort((a, b) => b.snake.getScore() - a.snake.getScore());
 });
+
+// 获取对局内编号（从1开始，补全两位）
+const getMatchNumber = (snake: Snake, fallbackIndex: number): string => {
+  try {
+    const meta: any = snake.getMetadata?.() || {};
+    const n = meta.matchNumber as number | undefined;
+    const num = typeof n === 'number' && n > 0 ? n : (fallbackIndex + 1);
+    return String(num).padStart(2, '0');
+  } catch {
+    return String(fallbackIndex + 1).padStart(2, '0');
+  }
+};
 
 // 获取蛇的显示名称
 const getSnakeName = (snakeData: any) => {
@@ -156,12 +170,10 @@ let updateTimerId: number;
 // 设置事件监听
 const setupEventListeners = () => {
   eventBus.on(GameEventType.UI_UPDATE_SCOREBOARD, updateScoreboard);
-  eventBus.on(GameEventType.GAME_OVER, resetState);
 
   // 返回清理函数
   return () => {
     eventBus.off(GameEventType.UI_UPDATE_SCOREBOARD, updateScoreboard);
-    eventBus.off(GameEventType.GAME_OVER, resetState);
   };
 };
 
@@ -255,10 +267,22 @@ onMounted(() => {
 }
 
 .score-color {
-  width: 10px;
+  position: relative;
+  width: 18px;
   height: 28px;
   border: 1px solid rgba(255, 255, 255, 0.3);
   flex-shrink: 0;
+}
+
+.score-color-number {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 10px;
+  font-weight: bold;
+  color: #0b0b0b;
+  text-shadow: 0 1px 0 rgba(255,255,255,0.5);
 }
 
 .score-info {

@@ -67,8 +67,7 @@ export class EntityFactory {
     selectedUsers.forEach((user, index) => {
       const angle = index * angleStep;
       const colorIndex = index % snakeColors.length;
-      snakes.push(
-        this.createApiControlledSnake(
+      const snake = this.createApiControlledSnake(
           radius,
           angle,
           snakeColors[colorIndex],
@@ -76,8 +75,10 @@ export class EntityFactory {
           coordinator,
           gameSessionId,
           user,
-        )
-      );
+        );
+      // 为本局分配从1开始的编号，存入元数据
+      snake.setMetadata({ matchNumber: index + 1 });
+      snakes.push(snake);
     });
 
     return snakes;

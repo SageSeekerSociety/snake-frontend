@@ -1,11 +1,14 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import router from "../router";
 
-const runtimeConfig = window.runtimeConfig || {
+export const runtimeConfig = {
   VITE_API_URL:
     import.meta.env.VITE_API_URL || "http://localhost:8080/api/cheese-auth",
   VITE_SANDBOX_URL:
     import.meta.env.VITE_SANDBOX_URL || "http://localhost:8080/api/sandbox",
+  ENABLE_USERNAME_LOGIN:
+    import.meta.env.VITE_ENABLE_USERNAME_LOGIN !== "false" || true,
+  ...window.runtimeConfig,
 };
 
 export const API_URL = runtimeConfig.VITE_API_URL;

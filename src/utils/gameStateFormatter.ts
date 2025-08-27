@@ -129,6 +129,37 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
     input += `${keyData.y} ${keyData.x} ${keyData.studentId} ${keyData.remainingTime}\n`;
   });
 
+  // 添加安全区信息块（三层信息）
+  if (frame.gameState.safeZone) {
+    const safeZone = frame.gameState.safeZone;
+    // 第一行：当前安全区边界 (Current State)
+    const bounds = safeZone.currentBounds;
+    input += `${bounds.xMin} ${bounds.yMin} ${bounds.xMax} ${bounds.yMax}\n`;
+    
+    // 第二行：下次跳变信息 (Imminent Warning)
+    if (safeZone.nextShrinkTick && safeZone.nextShrinkTick > frame.tick && safeZone.nextTargetBounds) {
+      // 使用录制时保存的准确目标边界
+      const targetBounds = safeZone.nextTargetBounds;
+      input += `${safeZone.nextShrinkTick} ${targetBounds.xMin} ${targetBounds.yMin} ${targetBounds.xMax} ${targetBounds.yMax}\n`;
+    } else {
+      input += `-1 ${bounds.xMin} ${bounds.yMin} ${bounds.xMax} ${bounds.yMax}\n`;
+    }
+    
+    // 第三行：最终目标信息 (Final Destination)  
+    if (safeZone.finalShrinkTick && safeZone.finalTargetBounds) {
+      // 使用录制时保存的准确最终目标边界
+      const finalBounds = safeZone.finalTargetBounds;
+      input += `${safeZone.finalShrinkTick} ${finalBounds.xMin} ${finalBounds.yMin} ${finalBounds.xMax} ${finalBounds.yMax}\n`;
+    } else {
+      input += `-1 ${bounds.xMin} ${bounds.yMin} ${bounds.xMax} ${bounds.yMax}\n`;
+    }
+  } else {
+    // 兼容性：默认全地图边界（适用于旧录制数据）
+    input += `0 0 39 29\n`; // 当前边界
+    input += `-1 0 0 39 29\n`; // 无下次跳变
+    input += `-1 0 0 39 29\n`; // 无最终目标
+  }
+
   return input;
 }
 

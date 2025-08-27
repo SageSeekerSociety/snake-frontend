@@ -6,7 +6,7 @@ import { GameState } from "../types/GameState";
 // 追逐蛇AI - 会追逐目标蛇
 export function chasingSnakeAI(snake: Snake, gameState: GameState, targetId: string = "target1"): void {
   // 找到要追逐的目标蛇
-  const targetSnake = findTargetSnake(gameState.snakes, targetId);
+  const targetSnake = findTargetSnake(gameState.entities.snakes, targetId);
   
   if (targetSnake && targetSnake.isAlive()) {
     // 如果找到目标蛇并且它还活着，向它移动
@@ -64,7 +64,7 @@ function moveRandomly(snake: Snake): void {
 // 被追逐的蛇AI - 会反向逃离追逐者
 export function escapingSnakeAI(snake: Snake, gameState: GameState, chaserId: string = "chaser1"): void {
   // 找到追逐者
-  const chaserSnake = findTargetSnake(gameState.snakes, chaserId);
+  const chaserSnake = findTargetSnake(gameState.entities.snakes, chaserId);
   
   if (chaserSnake && chaserSnake.isAlive()) {
     // 如果找到追逐者并且它还活着，反向逃离

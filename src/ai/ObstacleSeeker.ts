@@ -28,7 +28,7 @@ function findNearestObstacle(snake: Snake, gameState: GameState) {
   let nearestDistance = Infinity;
   let nearestObstacle = null;
   
-  for (const obstacle of gameState.obstacles) {
+  for (const obstacle of gameState.entities.obstacles) {
     const obstaclePos = obstacle.getPosition();
     // 使用曼哈顿距离
     const distance = 

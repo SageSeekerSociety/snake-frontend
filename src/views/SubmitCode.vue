@@ -2,76 +2,113 @@
   <div class="submit-container container-base">
     <div class="submit-card pixel-border">
       <div class="submit-header">
-        <h1 class="submit-title">蛇王争霸</h1>
+        <h1 class="submit-title">提交算法</h1>
         <div class="pixel-snake"></div>
-        <p class="submit-subtitle">上传你的算法，参与2024年中国人民大学信息学院蛇王争霸赛</p>
       </div>
 
       <div class="submit-content">
-        <div class="upload-section">
-          <label for="codeFile" class="file-label" :class="{ 'has-file': !!selectedFile }">
+        <div v-if="!isCompilingUI && !hasResult" class="upload-section">
+          <label
+            for="codeFile"
+            class="file-label pixel-border"
+            :class="{ 'has-file': !!selectedFile, dragging: isDragging, uploading: isUploading }"
+            :style="isUploading ? { '--upload-progress': uploadProgress + '%' } : {}"
+            @dragover.prevent="onDragOver"
+            @dragleave.prevent="onDragLeave"
+            @drop.prevent="onDrop"
+          >
             <div class="file-icon"></div>
-            <div class="file-text">
-              {{ selectedFile ? selectedFile.name : '点击选择 C++ 源代码文件' }}
+            <div class="file-content">
+              <template v-if="selectedFile">
+                <div class="file-name" :title="selectedFile.name">{{ selectedFile.name }}</div>
+                <div class="file-meta">
+                  <span class="meta-chip">大小: {{ formatFileSize(selectedFile.size) }}</span>
+                  <span class="meta-chip">最后修改: {{ formatDate(selectedFile.lastModified) }}</span>
+                </div>
+              </template>
+              <template v-else>
+                <div class="file-text">{{ isUploading ? '上传中...' : '点击选择 .cpp 源代码文件' }}</div>
+                <div class="file-hint">{{ isUploading ? `${uploadProgress}%` : '仅支持 .cpp，最大 1MB' }}</div>
+              </template>
+            </div>
+            <div v-if="selectedFile" class="file-actions">
+              <button
+                class="pixel-link-button small"
+                type="button"
+                @click.stop.prevent="triggerChooseFile"
+              >更换文件</button>
+              <button
+                class="pixel-link-button danger small"
+                type="button"
+                @click.stop.prevent="clearFile"
+              >清除</button>
             </div>
             <input
               type="file"
               id="codeFile"
-              accept=".cpp,.h,.hpp"
+              accept=".cpp"
               @change="handleFileChange"
               class="file-input"
+              ref="fileInputRef"
             />
           </label>
-
-          <div class="file-info" v-if="selectedFile">
-            <div class="info-row">
-              <span class="info-label">文件名:</span>
-              <span class="info-value">{{ selectedFile.name }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">大小:</span>
-              <span class="info-value">{{ formatFileSize(selectedFile.size) }}</span>
-            </div>
-            <div class="info-row">
-              <span class="info-label">最后修改:</span>
-              <span class="info-value">{{ formatDate(selectedFile.lastModified) }}</span>
-            </div>
-          </div>
-
-          <div v-if="error" class="error-message">{{ error }}</div>
-          <div v-if="success" class="success-message">{{ success }}</div>
 
           <div class="submit-actions">
             <button
               @click="handleSubmit"
               class="pixel-button"
-              :disabled="isSubmitting || !selectedFile"
+              :disabled="isUploading || !selectedFile"
             >
-              {{ isSubmitting ? '上传中...' : '提交代码' }}
+              {{ isUploading ? '上传中...' : '提交代码' }}
             </button>
           </div>
+
+          <!-- 只显示文件上传相关的错误（如文件类型、大小错误） -->
+          <div v-if="error && !compilationStatus" class="error-message">{{ error }}</div>
         </div>
 
-        <div v-if="diagnoseResult" class="diagnose-section">
-          <h2 class="diagnose-title">诊断结果</h2>
-          <div class="diagnose-content">
-            <div v-if="isSubmitSuccess" class="diagnose-success">
-              <div class="success-icon"></div>
-              <div class="success-text">提交成功！</div>
+        <!-- 编译/结果区域：在上传完成后或 SUBMITTED 后进入显示（统一使用状态条样式） -->
+        <div v-if="isCompilingUI || compilationStatus" class="result-section">
+          <!-- 统一的状态条（编译中/成功/失败） -->
+          <div class="status-bar pixel-border" :class="statusBarClass">
+            <div class="status-icon" :class="statusIconClass"></div>
+            <div class="status-info">
+              <div class="status-text">{{ effectiveStatusText }}</div>
+              <div v-if="jobId" class="job-id">ID: {{ jobId }}</div>
             </div>
-            <pre class="diagnose-text">{{ diagnoseResult }}</pre>
+            <div v-if="compilationTime && hasResult" class="compilation-time">{{ compilationTime }}</div>
+          </div>
+          
+          <!-- 编译输出 -->
+          <div v-if="compilationOutput" class="console-output pixel-border">
+            <div class="console-header">
+              <div class="console-title">编译输出</div>
+              <div class="console-dots">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+            <pre class="console-content">{{ compilationOutput }}</pre>
+          </div>
+
+          <!-- 操作区：编译中与结果阶段都提供便捷操作 -->
+          <div v-if="isCompilingUI && !hasResult" class="result-actions">
+            <button class="pixel-link-button danger small" @click="cancelAndReselect">取消并重新选择</button>
+          </div>
+
+          <div v-if="hasResult" class="result-actions">
+            <button class="pixel-link-button danger" @click="reselectFile">重新选择文件</button>
+            <router-link to="/" class="pixel-link-button">返回首页</router-link>
           </div>
         </div>
       </div>
 
-      <div class="submit-footer">
+      <!-- 提交须知：在编译/结果阶段隐藏，保持界面简洁聚焦 -->
+      <div v-if="!isCompilingUI && !hasResult" class="submit-footer">
         <div class="rules-section">
           <h3 class="rules-title">提交须知</h3>
           <ul class="rules-list">
-            <li>仅支持 .cpp, .h, .hpp 等 C++ 文件</li>
-            <li>文件大小不超过 1MB</li>
-            <li>代码需要实现 Snake 类及所需算法</li>
-            <li>查看<router-link to="/docs" class="pixel-link">文档</router-link>了解更多</li>
+            <li>仅支持提交单个 C++ 文件</li>
+            <li>查看<router-link to="/rules" class="pixel-link">规则文档</router-link>了解更多</li>
           </ul>
         </div>
 
@@ -84,7 +121,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted } from 'vue';
+import { ref, onUnmounted, computed, nextTick } from 'vue';
 import { sandboxService } from '../services/sandboxService';
 import { useAuth } from '../stores/auth';
 import { SSE } from 'sse.js';
@@ -92,25 +129,85 @@ import { SSE } from 'sse.js';
 const { state } = useAuth();
 
 const selectedFile = ref<File | null>(null);
+const fileInputRef = ref<HTMLInputElement | null>(null);
+const isDragging = ref(false);
+const uploadProgress = ref(0);
 const error = ref<string | null>(null);
-const success = ref<string | null>(null);
+const isUploading = ref(false);
 const isSubmitting = ref(false);
-const diagnoseResult = ref<string | null>(null);
-const isSubmitSuccess = ref(false);
+const compilationStatus = ref<'success' | 'error' | 'compiling' | null>(null);
+const compilationOutput = ref<string | null>(null);
+const compilationTime = ref<string | null>(null);
+const statusText = ref<string | null>(null);
 const jobId = ref<string | null>(null);
+
+const statusBarClass = computed(() => {
+  if (hasResult.value && compilationStatus.value) {
+    return `status-${compilationStatus.value}`;
+  }
+  if (isCompilingUI.value) return 'status-compiling';
+  return '';
+});
+
+const statusIconClass = computed(() => {
+  if (hasResult.value && compilationStatus.value) {
+    return `icon-${compilationStatus.value}`;
+  }
+  if (isCompilingUI.value) return 'icon-compiling';
+  return '';
+});
 const sseSource = ref<SSE | null>(null);
+
+// UI 阶段：便于模板控制展示
+const isCompiling = computed(() => compilationStatus.value === 'compiling');
+const hasResult = computed(() => compilationStatus.value === 'success' || compilationStatus.value === 'error');
+// 上传完成标志，用于在 SSE 返回前展示编译中界面
+const uploadCompleted = ref(false);
+// 编译中界面显隐：上传完成后或实际进入编译状态
+const isCompilingUI = computed(() => isCompiling.value || (uploadCompleted.value && !hasResult.value));
+const compilingHint = computed(() => (isCompiling.value ? '请稍候，正在编译...' : '上传完成，等待编译开始...'));
+const effectiveStatusText = computed(() => statusText.value || compilingHint.value);
 
 const closeSSEConnection = () => {
   if (sseSource.value) {
     sseSource.value.close();
     sseSource.value = null;
   }
+  isUploading.value = false;
   isSubmitting.value = false;
 };
 
 const resetSubmitArea = () => {
   closeSSEConnection();
+  isUploading.value = false;
   isSubmitting.value = false;
+};
+
+const processFile = (file: File) => {
+  // 检查文件类型
+  const allowedExtensions = ['.cpp'];
+  const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
+
+  if (!allowedExtensions.includes(fileExtension)) {
+    error.value = `不支持的文件类型: ${fileExtension}。仅支持 .cpp 源代码文件`;
+    selectedFile.value = null;
+    return;
+  }
+
+  // 检查文件大小（最大1MB）
+  if (file.size > 1024 * 1024) {
+    error.value = '文件太大，请上传小于1MB的文件';
+    selectedFile.value = null;
+    return;
+  }
+
+  selectedFile.value = file;
+  error.value = null;
+  compilationStatus.value = null;
+  compilationOutput.value = null;
+  compilationTime.value = null;
+  statusText.value = null;
+  uploadProgress.value = 0;
 };
 
 const handleFileChange = (event: Event) => {
@@ -118,33 +215,58 @@ const handleFileChange = (event: Event) => {
   jobId.value = null; // 重置作业ID
   const input = event.target as HTMLInputElement;
   if (input.files && input.files.length > 0) {
-    const file = input.files[0];
-
-    // 检查文件类型
-    const allowedExtensions = ['.cpp', '.h', '.hpp'];
-    const fileExtension = file.name.substring(file.name.lastIndexOf('.')).toLowerCase();
-
-    if (!allowedExtensions.includes(fileExtension)) {
-      error.value = `不支持的文件类型: ${fileExtension}。请上传C++源代码文件`;
-      selectedFile.value = null;
-      return;
-    }
-
-    // 检查文件大小（最大1MB）
-    if (file.size > 1024 * 1024) {
-      error.value = '文件太大，请上传小于1MB的文件';
-      selectedFile.value = null;
-      return;
-    }
-
-    selectedFile.value = file;
-    error.value = null;
-    success.value = null;
-    diagnoseResult.value = null;
-    isSubmitSuccess.value = false;
+    processFile(input.files[0]);
   } else {
     selectedFile.value = null;
   }
+};
+
+const onDragOver = () => {
+  isDragging.value = true;
+};
+
+const onDragLeave = () => {
+  isDragging.value = false;
+};
+
+const onDrop = (event: DragEvent) => {
+  isDragging.value = false;
+  if (event.dataTransfer && event.dataTransfer.files && event.dataTransfer.files.length > 0) {
+    const file = event.dataTransfer.files[0];
+    closeSSEConnection();
+    jobId.value = null;
+    processFile(file);
+    if (fileInputRef.value) fileInputRef.value.value = '';
+  }
+};
+
+const triggerChooseFile = () => {
+  fileInputRef.value?.click();
+};
+
+const clearFile = () => {
+  closeSSEConnection();
+  selectedFile.value = null;
+  error.value = null;
+  compilationStatus.value = null;
+  compilationOutput.value = null;
+  compilationTime.value = null;
+  statusText.value = null;
+  uploadProgress.value = 0;
+  uploadCompleted.value = false;
+  if (fileInputRef.value) fileInputRef.value.value = '';
+};
+
+// 重新选择：清空并自动打开文件选择器，确保读取本地最新内容
+const reselectFile = async () => {
+  clearFile();
+  await nextTick();
+  fileInputRef.value?.click();
+};
+
+// 取消并重新选择：中断监听后直接打开文件选择器
+const cancelAndReselect = () => {
+  reselectFile();
 };
 
 const handleSSEMessages = (data: any) => {
@@ -153,102 +275,68 @@ const handleSSEMessages = (data: any) => {
   if (data && typeof data === 'object') {
     const status = data.status;
     const eventType = data.eventType;
-    const jobIdFromResponse = data.jobId || jobId.value;
 
-    // 如果收到了jobId，则更新存储的jobId
+    // 更新jobId
     if (data.jobId && !jobId.value) {
       jobId.value = data.jobId;
-      console.log('更新jobId:', jobId.value);
     }
 
     // 根据事件类型处理
     if (eventType === 'SUBMITTED') {
-      diagnoseResult.value = `作业ID: ${jobIdFromResponse}\n状态: 已提交\n消息: ${data.message || '代码已提交，等待编译...'}`;
+      compilationStatus.value = 'compiling';
+      statusText.value = '代码已提交，正在编译...';
+      isUploading.value = false;
+      isSubmitting.value = true;
     }
     else if (eventType === 'STATUS_UPDATE') {
-      let statusInfo = `作业ID: ${jobIdFromResponse}\n`;
-      statusInfo += `状态: ${status}\n`;
-      statusInfo += `消息: ${data.message || '正在处理中...'}\n`;
-
       if (status === 'SUCCESS') {
-        success.value = '编译成功';
+        compilationStatus.value = 'success';
+        statusText.value = '编译成功';
       } else if (status === 'FAILED' || status === 'ERROR') {
-        error.value = '编译失败';
+        compilationStatus.value = 'error';
+        statusText.value = '编译失败';
+      } else {
+        compilationStatus.value = 'compiling';
+        statusText.value = data.message || '正在处理中...';
       }
-
-      diagnoseResult.value = statusInfo;
     }
     else if (eventType === 'FINAL_RESULT') {
-      // 处理最终结果，包含完整的信息
       if (data.data) {
         const resultData = data.data;
         const compilerOutput = resultData.compilerOutput || '';
-        const errorDetails = resultData.errorDetails || '';
+        const startTime = resultData.startTime ? new Date(resultData.startTime).toLocaleString('zh-CN') : null;
+        const endTime = resultData.endTime ? new Date(resultData.endTime).toLocaleString('zh-CN') : null;
 
-        // 添加时间信息
-        const submitTime = resultData.submitTime ? new Date(resultData.submitTime).toLocaleString('zh-CN') : '未知';
-        const startTime = resultData.startTime ? new Date(resultData.startTime).toLocaleString('zh-CN') : '未知';
-        const endTime = resultData.endTime ? new Date(resultData.endTime).toLocaleString('zh-CN') : '处理中';
-
-        let statusInfo = `作业ID: ${jobIdFromResponse}\n`;
-        statusInfo += `提交时间: ${submitTime}\n`;
-        statusInfo += `开始时间: ${startTime}\n`;
-        statusInfo += `完成时间: ${endTime}\n`;
-        statusInfo += `状态: ${status}\n`;
+        // 计算编译时间
+        if (startTime && endTime) {
+          const duration = new Date(resultData.endTime).getTime() - new Date(resultData.startTime).getTime();
+          compilationTime.value = `${(duration / 1000).toFixed(2)}s`;
+        }
 
         if (status === 'SUCCESS') {
-          success.value = '编译成功';
-          statusInfo += `编译输出:\n${compilerOutput}`;
-          diagnoseResult.value = statusInfo;
-          isSubmitSuccess.value = true;
-          resetSubmitArea();
+          compilationStatus.value = 'success';
+          statusText.value = '编译成功';
         } else if (status === 'FAILED' || status === 'ERROR') {
-          error.value = '编译失败';
-          statusInfo += `编译输出:\n${compilerOutput}\n`;
-          statusInfo += `错误详情: ${errorDetails}`;
-          diagnoseResult.value = statusInfo;
-          isSubmitSuccess.value = false;
-          resetSubmitArea();
-        } else {
-          diagnoseResult.value = statusInfo;
+          compilationStatus.value = 'error';
+          statusText.value = '编译失败';
         }
-      } else {
-        // 如果没有data字段，使用简单的状态显示
-        let statusInfo = `作业ID: ${jobIdFromResponse}\n`;
-        statusInfo += `状态: ${status}\n`;
-        statusInfo += `消息: ${data.message || '处理完成'}`;
-        diagnoseResult.value = statusInfo;
 
-        if (status === 'SUCCESS') {
-          success.value = '编译成功';
-          isSubmitSuccess.value = true;
-          resetSubmitArea();
-        } else if (status === 'FAILED' || status === 'ERROR') {
-          error.value = '编译失败';
-          isSubmitSuccess.value = false;
-          resetSubmitArea();
+        // 设置编译输出
+        if (compilerOutput.trim()) {
+          compilationOutput.value = compilerOutput;
         }
+
+        resetSubmitArea();
       }
     }
-    else {
-      // 其他类型的事件
-      let statusInfo = `作业ID: ${jobIdFromResponse}\n`;
-      statusInfo += `状态: ${status || '未知'}\n`;
-      statusInfo += `事件类型: ${eventType || '未知'}\n`;
-      statusInfo += `消息: ${data.message || '正在处理中...'}`;
-      diagnoseResult.value = statusInfo;
-    }
-  } else {
-    // 处理非JSON格式的消息
-    diagnoseResult.value = `状态: 更新中... (收到未知格式消息)`;
   }
 };
 
 const handleSSEError = (err: any) => {
   console.error('SSE连接错误:', err);
   error.value = '监听编译状态时出错';
-  diagnoseResult.value += '\n连接中断，请刷新页面重试。';
-  isSubmitSuccess.value = false;
+  compilationStatus.value = 'error';
+  statusText.value = '连接中断，请刷新页面重试';
   resetSubmitArea();
 };
 
@@ -259,30 +347,39 @@ const handleSubmit = async () => {
   }
 
   closeSSEConnection(); // 关闭之前的SSE连接
-  isSubmitting.value = true;
+  isUploading.value = true;
   error.value = null;
-  success.value = null;
-  diagnoseResult.value = null;
-  isSubmitSuccess.value = false;
+  compilationStatus.value = null;
+  compilationOutput.value = null;
+  compilationTime.value = null;
+  statusText.value = null;
   jobId.value = null;
+  uploadProgress.value = 0;
+  uploadCompleted.value = false;
 
   console.log('开始上传代码文件', selectedFile.value.name);
-  diagnoseResult.value = '正在提交编译...';
-  success.value = '开始监听编译结果...';
 
   try {
     // 使用SSE监听编译状态
     sseSource.value = await sandboxService.submitCodeWithSSE(
       selectedFile.value,
       handleSSEMessages,
-      handleSSEError
+      handleSSEError,
+      (progressPercent: number) => {
+        uploadProgress.value = progressPercent;
+        if (progressPercent >= 100) {
+          // 上传完成，等待编译阶段：显示中间页面与动画
+          uploadCompleted.value = true;
+        }
+      }
     );
   } catch (err: any) {
     console.error('创建SSE连接错误:', err);
     error.value = err.message || '创建SSE连接失败';
-    diagnoseResult.value = '提交过程中发生错误';
-    isSubmitSuccess.value = false;
-    isSubmitting.value = false;
+    compilationStatus.value = 'error';
+    statusText.value = '提交过程中发生错误';
+    isUploading.value = false;
+    uploadProgress.value = 0;
   }
 };
 
@@ -323,6 +420,32 @@ onUnmounted(() => {
   overflow-y: auto;
 }
 
+/* 自定义滚动条样式 */
+.submit-card::-webkit-scrollbar {
+  width: 12px;
+}
+
+.submit-card::-webkit-scrollbar-track {
+  background: var(--bg-color);
+  border: 2px solid var(--border-color);
+  border-radius: 0;
+}
+
+.submit-card::-webkit-scrollbar-thumb {
+  background: var(--accent-color);
+  border: 1px solid var(--border-color);
+  border-radius: 0;
+  transition: background-color 0.2s ease;
+}
+
+.submit-card::-webkit-scrollbar-thumb:hover {
+  background: rgba(74, 222, 128, 0.8);
+}
+
+.submit-card::-webkit-scrollbar-corner {
+  background: var(--bg-color);
+}
+
 .submit-header {
   display: flex;
   flex-direction: column;
@@ -358,28 +481,78 @@ onUnmounted(() => {
 }
 
 .file-label {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
   align-items: center;
-  justify-content: center;
-  gap: 15px;
+  gap: 16px;
   background-color: var(--input-bg);
-  border: 2px dashed var(--border-color);
+  border: 4px solid var(--border-color);
   border-radius: 8px;
-  padding: 30px;
+  padding: 18px 20px;
   cursor: pointer;
   transition: all 0.2s;
+  box-shadow: 0 0 12px rgba(74, 222, 128, 0.12);
+  position: relative;
+  overflow: hidden;
 }
 
 .file-label:hover {
   border-color: var(--accent-color);
-  background-color: rgba(74, 222, 128, 0.05);
+  background-color: rgba(74, 222, 128, 0.06);
 }
 
 .file-label.has-file {
-  border-style: solid;
   border-color: var(--accent-color);
-  background-color: rgba(74, 222, 128, 0.1);
+  background-color: rgba(74, 222, 128, 0.08);
+}
+
+.file-label.dragging {
+  border-color: var(--accent-color);
+  background: repeating-linear-gradient(
+      45deg,
+      rgba(74, 222, 128, 0.12),
+      rgba(74, 222, 128, 0.12) 8px,
+      rgba(74, 222, 128, 0.06) 8px,
+      rgba(74, 222, 128, 0.06) 16px
+  );
+}
+
+.file-label.uploading::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: var(--upload-progress, 0%);
+  background: linear-gradient(
+    90deg,
+    rgba(74, 222, 128, 0.08) 0%,
+    rgba(74, 222, 128, 0.12) 50%,
+    rgba(74, 222, 128, 0.08) 100%
+  );
+  border-radius: 4px;
+  transition: width 0.3s ease;
+  z-index: -1;
+}
+
+.file-label.uploading {
+  border-color: rgba(74, 222, 128, 0.3);
+  background-color: rgba(74, 222, 128, 0.03);
+}
+
+.file-quick-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+
+.pixel-link-button.danger {
+  border-color: var(--error-color);
+  color: var(--error-color);
+}
+
+.pixel-link-button.danger:hover {
+  box-shadow: 0px 4px 0px rgba(0, 0, 0, 0.2);
 }
 
 .file-icon {
@@ -400,22 +573,92 @@ onUnmounted(() => {
   clip-path: polygon(0 0, 100% 100%, 100% 0);
 }
 
+.file-content {
+  min-width: 0;
+}
+
 .file-text {
   font-size: 14px;
   color: var(--text-color);
-  text-align: center;
+}
+
+.file-hint {
+  margin-top: 6px;
+  font-size: 12px;
+  color: var(--border-color);
+}
+
+.file-name {
+  font-size: 15px;
+  color: var(--text-color);
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-meta {
+  margin-top: 8px;
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.meta-chip {
+  font-size: 12px;
+  color: var(--text-color);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  padding: 4px 8px;
 }
 
 .file-input {
   display: none;
 }
 
-.file-info {
-  background-color: var(--input-bg);
-  border-radius: 4px;
-  padding: 15px;
-  border: 2px solid var(--border-color);
+.file-actions {
+  display: flex;
+  gap: 12px;
+  align-self: start;
+  justify-self: end;
 }
+
+.pixel-link-button.small {
+  padding: 6px 10px;
+  font-size: 10px;
+}
+
+/* 合并后不再需要单独的 file-info 容器 */
+
+.icon-button {
+  width: 36px;
+  height: 32px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.pixel-icon {
+  width: 18px;
+  height: 18px;
+  fill: currentColor;
+  image-rendering: pixelated;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 
 .info-row {
   display: flex;
@@ -444,71 +687,243 @@ onUnmounted(() => {
   margin-top: 10px;
 }
 
-.diagnose-section {
+/* 新的结果显示区域 */
+.result-section {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 16px;
 }
 
-.diagnose-title {
-  font-size: 18px;
-  color: var(--accent-color);
-  margin-bottom: 10px;
-}
-
-.diagnose-content {
-  background-color: var(--input-bg);
-  border-radius: 4px;
-  padding: 15px;
+/* 编译中的可视化块 */
+.compiling-visual {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--input-bg);
   border: 2px solid var(--border-color);
-  overflow: hidden;
 }
 
-.diagnose-success {
+.pixel-loader {
+  display: grid;
+  grid-template-columns: repeat(4, 12px);
+  gap: 8px;
+}
+
+.pixel-loader span {
+  width: 12px;
+  height: 12px;
+  background: var(--accent-color);
+  image-rendering: pixelated;
+  animation: loaderPulse 1.1s steps(2, end) infinite;
+}
+
+.pixel-loader span:nth-child(1) { animation-delay: 0s; }
+.pixel-loader span:nth-child(2) { animation-delay: 0.1s; }
+.pixel-loader span:nth-child(3) { animation-delay: 0.2s; }
+.pixel-loader span:nth-child(4) { animation-delay: 0.3s; }
+
+@keyframes loaderPulse {
+  0%, 100% { filter: brightness(1); opacity: 1; }
+  50% { filter: brightness(0.6); opacity: 0.8; }
+}
+
+.compiling-hint {
+  font-size: 12px;
+  color: var(--text-color);
+}
+
+.result-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  justify-content: center;
+}
+
+.resubmit-hint {
+  margin-top: 6px;
+  font-size: 11px;
+  color: var(--border-color);
+  text-align: center;
+}
+
+/* 状态条 */
+.status-bar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  background-color: rgba(16, 185, 129, 0.1);
-  padding: 10px;
-  border-radius: 4px;
-  margin-bottom: 15px;
+  gap: 12px;
+  padding: 12px 16px;
+  background: var(--input-bg);
+  border: 2px solid var(--border-color);
+  transition: all 0.2s ease;
 }
 
-.success-icon {
-  width: 20px;
-  height: 20px;
-  background-color: var(--success-color);
-  border-radius: 50%;
+.status-bar.status-success {
+  border-color: var(--success-color);
+  background: rgba(16, 185, 129, 0.08);
+}
+
+.status-bar.status-error {
+  border-color: var(--error-color);
+  background: rgba(239, 68, 68, 0.08);
+}
+
+.status-bar.status-compiling {
+  border-color: var(--accent-color);
+  background: rgba(74, 222, 128, 0.08);
+  animation: pulse 2s infinite;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.7; }
+}
+
+/* 状态图标 */
+.status-icon {
+  width: 16px;
+  height: 16px;
+  border-radius: 2px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.status-icon.icon-success {
+  background: var(--success-color);
   position: relative;
 }
 
-.success-icon::after {
+.status-icon.icon-success::after {
   content: '';
-  position: absolute;
-  top: 6px;
-  left: 5px;
-  width: 8px;
-  height: 4px;
+  width: 6px;
+  height: 3px;
   border: solid white;
   border-width: 0 0 2px 2px;
   transform: rotate(-45deg);
 }
 
-.success-text {
-  color: var(--success-color);
-  font-size: 14px;
+.status-icon.icon-error {
+  background: var(--error-color);
+  position: relative;
 }
 
-.diagnose-text {
-  font-family: monospace;
+.status-icon.icon-error::after {
+  content: '×';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.status-icon.icon-compiling {
+  background: var(--accent-color);
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+/* 状态信息 */
+.status-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.status-text {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-color);
+  margin-bottom: 2px;
+}
+
+.job-id {
+  font-size: 11px;
+  color: var(--border-color);
+  font-family: 'Courier New', monospace;
+}
+
+.compilation-time {
   font-size: 12px;
-  background-color: rgba(0, 0, 0, 0.2);
-  padding: 10px;
+  color: var(--border-color);
+  background: rgba(0, 0, 0, 0.2);
+  padding: 4px 8px;
+  border-radius: 2px;
+  font-family: monospace;
+}
+
+/* Console输出区域 */
+.console-output {
+  background: #1a1a1a;
+  border: 2px solid var(--border-color);
   border-radius: 4px;
-  max-height: 400px;
+  overflow: hidden;
+}
+
+.console-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: #2d2d2d;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.console-title {
+  font-size: 12px;
+  color: #ccc;
+  font-weight: 500;
+}
+
+.console-dots {
+  display: flex;
+  gap: 4px;
+}
+
+.console-dots span {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #555;
+}
+
+.console-dots span:nth-child(1) { background: #ff5f57; }
+.console-dots span:nth-child(2) { background: #ffbd2e; }
+.console-dots span:nth-child(3) { background: #28ca42; }
+
+.console-content {
+  font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
+  font-size: 12px;
+  color: #f8f8f2;
+  background: #1a1a1a;
+  padding: 12px;
+  margin: 0;
+  line-height: 1.4;
+  max-height: 300px;
   overflow-y: auto;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+}
+
+.console-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.console-content::-webkit-scrollbar-track {
+  background: #2d2d2d;
+}
+
+.console-content::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 4px;
+}
+
+.console-content::-webkit-scrollbar-thumb:hover {
+  background: #777;
 }
 
 .submit-footer {
@@ -568,7 +983,8 @@ onUnmounted(() => {
   }
 
   .file-label {
-    padding: 20px;
+    grid-template-columns: 48px 1fr auto;
+    padding: 14px 16px;
   }
 
   .diagnose-text {

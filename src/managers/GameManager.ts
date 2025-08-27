@@ -4,6 +4,7 @@ import { Key } from "../entities/Key";
 import { Position } from "../types/Position";
 import { GameConfig } from "../config/GameConfig";
 import { User } from "../types/User";
+import { GameState } from "../types/GameState";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { CanvasManager } from "./CanvasManager";
 import { SpatialHashGrid } from "../core/SpatialHashGrid";
@@ -84,7 +85,7 @@ export class GameManager {
     this.gameClock = new GameClock(GameConfig.TOTAL_TICKS); // Get total ticks from config
     this.inputHandler = new InputHandler(canvas);
     this.decisionCoordinator = new DecisionRequestCoordinator();
-    this.treasureSystem = new TreasureSystem(this.entityManager);
+    this.treasureSystem = new TreasureSystem(this.entityManager, this.safeZoneManager);
 
     // Initialize recording service if enabled
     if (this.recordingEnabled) {
@@ -108,6 +109,7 @@ export class GameManager {
   private boundHandleGameOver!: () => void;
   private boundCheckGameOverCondition!: (snake: Snake) => void;
   private boundHandleTreasureSpawned!: (data: { treasure: TreasureChest, keys: Key[] }) => void;
+  private boundHandleTreasureReplaced!: (data: { oldTreasure?: TreasureChest, oldKeys?: Key[], treasure: TreasureChest, keys: Key[] }) => void;
   private boundHandleKeyDropped!: (data: { key: Key, snake: Snake }) => void;
   private boundHandleKeyRemoved!: (data: { key: Key }) => void;
 
@@ -120,6 +122,7 @@ export class GameManager {
     this.boundHandleGameOver = this.handleGameOver.bind(this);
     this.boundCheckGameOverCondition = this.checkGameOverCondition.bind(this);
     this.boundHandleTreasureSpawned = this.handleTreasureSpawned.bind(this);
+    this.boundHandleTreasureReplaced = this.handleTreasureReplaced.bind(this);
     this.boundHandleKeyDropped = this.handleKeyDropped.bind(this);
     this.boundHandleKeyRemoved = this.handleKeyRemoved.bind(this);
     
@@ -133,6 +136,7 @@ export class GameManager {
     
     // Treasure system event handlers
     eventBus.on(GameEventType.TREASURE_SPAWNED, this.boundHandleTreasureSpawned);
+    eventBus.on(GameEventType.TREASURE_REPLACED, this.boundHandleTreasureReplaced);
     eventBus.on(GameEventType.KEY_DROPPED, this.boundHandleKeyDropped);
     eventBus.on(GameEventType.KEY_REMOVED, this.boundHandleKeyRemoved);
   }
@@ -233,22 +237,40 @@ export class GameManager {
     if (!this.recordingEnabled) return;
 
     try {
-      // 获取当前游戏状态作为初始状态（第0帧）
-      const initialGameState = this.entityManager.getGameState();
-      const initialVortexFieldData = this.vortexFieldManager.getApiData();
+      // 组装完整的初始游戏状态（第0帧）
+      const initialGameState = this.assembleGameState();
+      
+      // Get initial treasure chests and keys from treasure system
+      const initialTreasureChests = this.treasureSystem.getCurrentTreasure() 
+        ? [this.treasureSystem.getCurrentTreasure()!] 
+        : [];
+      const initialKeys = this.treasureSystem.getCurrentKeys();
 
       gameRecordingService.startRecording(
         this.selectedUsers,
         this.gameClock.getTotalTicks(),
-        initialGameState, // 传递初始游戏状态
-        initialVortexFieldData // 传递初始涡流场状态
+        initialGameState,
       );
       this.isRecording = true;
-      console.log("Game recording started with initial state");
     } catch (error) {
       console.error("Failed to start game recording:", error);
       this.isRecording = false;
     }
+  }
+
+  /**
+   * Assembles complete GameState from subsystems
+   */
+  private assembleGameState(): GameState {
+    const entityState = this.entityManager.getEntityState();
+    const vortexFieldData = this.vortexFieldManager.getApiData();
+    const currentTick = this.gameClock.getCurrentTick();
+    
+    return {
+      entities: entityState,
+      vortexField: vortexFieldData,
+      safeZone: this.safeZoneManager.getAlgorithmInfo(currentTick)
+    };
   }
 
   /**
@@ -269,7 +291,8 @@ export class GameManager {
     // 0.5. Update Treasure System
     this.treasureSystem.update(currentTick);
 
-    const gameState = this.entityManager.getGameState(); // Get current state for decisions
+    // Assemble complete game state with all system information
+    const gameState = this.assembleGameState();
 
     // 1. Gather Decisions (Asynchronous)
     await this.entityManager.getAllSnakeDecisions(gameState);
@@ -332,9 +355,13 @@ export class GameManager {
     if (!this.isRecording) return;
 
     try {
-      const gameState = this.entityManager.getGameState();
-      const vortexFieldData = this.vortexFieldManager.getApiData();
-      gameRecordingService.recordFrame(tick, gameState, vortexFieldData);
+      // Assemble complete game state
+      const gameState = this.assembleGameState();
+      
+      gameRecordingService.recordFrame(
+        tick, 
+        gameState,
+      );
     } catch (error) {
       console.error("Failed to record game frame:", error);
     }
@@ -350,6 +377,11 @@ export class GameManager {
       const headPosition = snake.getBody()[0];
       
       if (!this.safeZoneManager.isPositionSafe(headPosition)) {
+        // Allow snake to remain outside the safe zone while shield is active
+        if (snake.isShieldActive()) {
+          continue;
+        }
+
         const snakeName = snake.getMetadata()?.name || `Snake ${this.entityManager.getAllSnakes().indexOf(snake) + 1}`;
         console.log(`[SafeZone] ${snakeName} violated safe zone at (${Math.floor(headPosition.x / 20)}, ${Math.floor(headPosition.y / 20)})`);
         this.startDeathAnimation(snake, "left the safe zone");
@@ -458,6 +490,9 @@ export class GameManager {
         break;
       case "obstacle":
         deathReason = "hit obstacle";
+        break;
+      case "treasure_fatal":
+        deathReason = "hit treasure without key";
         break;
       case "snake":
         if (result.collidedWith instanceof Snake) {
@@ -750,7 +785,7 @@ export class GameManager {
     const vortexState = this.createVortexRenderState(vortexStatus);
     
     // Get current safe zone state for rendering
-    const safeZoneStatus = this.safeZoneManager.getStatus();
+    const safeZoneStatus = this.safeZoneManager.getStatus(this.gameClock.getCurrentTick());
     
     this.canvasManager.render(renderables, vortexState, timestamp, safeZoneStatus); // Pass both states
 
@@ -785,6 +820,29 @@ export class GameManager {
     }
     
     console.log(`[GameManager] Added treasure and ${data.keys?.length || 0} keys to game`);
+  }
+
+  /**
+   * Handles replacing an existing treasure and its keys with a new set
+   */
+  private handleTreasureReplaced(data: { oldTreasure?: TreasureChest, oldKeys?: Key[], treasure: TreasureChest, keys: Key[] }): void {
+    // Remove old entities if provided
+    if (data.oldTreasure) {
+      this.entityManager.removeTreasureChest(data.oldTreasure);
+    }
+    if (data.oldKeys && Array.isArray(data.oldKeys)) {
+      data.oldKeys.forEach(k => this.entityManager.removeKey(k));
+    }
+
+    // Add new ones
+    if (data.treasure) {
+      this.entityManager.addTreasureChest(data.treasure);
+    }
+    if (data.keys && Array.isArray(data.keys)) {
+      data.keys.forEach(k => this.entityManager.addKey(k));
+    }
+
+    console.log(`[GameManager] Replaced treasure and keys (added ${data.keys?.length || 0} keys)`);
   }
 
   /**
