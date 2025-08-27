@@ -128,18 +128,21 @@ export class CollisionDetector {
               break;
 
             case "key":
-              // Key collision is not fatal, just report it for pickup
-              collisionResults.push({
-                type: "key",
-                snake: snake,
-                collidedWith: item.position,
-                position: head,
-              });
+              // Key collision is not fatal, only report if snake doesn't already have a key
+              if (!snake.hasKey()) {
+                collisionResults.push({
+                  type: "key",
+                  snake: snake,
+                  collidedWith: item.position,
+                  position: head,
+                });
+              }
+              // If snake already has a key, ignore this collision completely
               break;
 
             case "treasure_chest":
               // Treasure chest: fatal if snake has no key (shields do not help); otherwise non-fatal open attempt
-              if (typeof (snake as any).hasKey === 'function' && (snake as any).hasKey()) {
+              if (snake.hasKey()) {
                 collisionResults.push({
                   type: "treasure_chest",
                   snake: snake,

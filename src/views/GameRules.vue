@@ -64,18 +64,19 @@
 
             <h3>3. 碰撞规则</h3>
             <ul>
-              <li><b>与障碍物碰撞</b>：蛇立即死亡。<b>此规则优先级最高，护盾无效</b>。</li>
+              <li><b>与障碍物碰撞</b>：蛇立即死亡。<b>此规则优先级最高，护盾无效</b></li>
+              <li><b>与自己的身体碰撞</b>：无影响，不会死亡</li>
               <li><b>与其他蛇身体碰撞</b>：
                 <ul>
-                  <li>持有护盾：免疫碰撞，可安全穿过对方蛇的身体。</li>
-                  <li>未持有护盾：碰撞方立即死亡。</li>
+                  <li>持有护盾：免疫碰撞，可安全穿过对方蛇的身体</li>
+                  <li>未持有护盾：碰撞方立即死亡</li>
                 </ul>
               </li>
               <li><b>蛇头与蛇头碰撞</b>：
                 <ul>
-                  <li>双方均有护盾：双方均不受伤害。</li>
-                  <li>仅一方有护盾：未持有护盾的一方死亡。</li>
-                  <li>双方均无护盾：双方同时死亡。</li>
+                  <li>双方均有护盾：双方均不受伤害</li>
+                  <li>仅一方有护盾：未持有护盾的一方死亡</li>
+                  <li>双方均无护盾：双方同时死亡</li>
                 </ul>
               </li>
             </ul>
@@ -213,10 +214,10 @@
 y1 x1 v1 t1
 ...
 蛇总数
-id1 len1 score1 dir1 shield_cd1 shield_time1 has_key1
+id1 len1 score1 dir1 shield_cd1 shield_time1
 y1_1 x1_1
 ...
-id2 len2 score2 dir2 shield_cd2 shield_time2 has_key2
+id2 len2 score2 dir2 shield_cd2 shield_time2
 ...
 宝箱总数
 y_chest1 x_chest1 score1

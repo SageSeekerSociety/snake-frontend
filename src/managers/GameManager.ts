@@ -611,8 +611,8 @@ export class GameManager {
             t.getPosition().y === treasurePos.y
         );
       if (treasure && this.treasureSystem.handleTreasureOpening(result.snake, treasure)) {
-        // Treasure was successfully opened - it will be handled by the treasure system
-        // No need to remove it here as it might need to stay for visual feedback
+        // Treasure was successfully opened - remove it immediately to prevent double collision
+        this.entityManager.removeTreasureChest(treasure);
       }
     }
   }
