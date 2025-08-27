@@ -223,68 +223,38 @@ export class SafeZoneManager {
     this.shrinkStartTick = currentTick;
     this.shrinkDuration = shrinkEvent.DURATION;
 
-    // Store initial bounds for this shrink (current bounds become the starting point)
     this.initialBoundsForCurrentShrink = { ...this.currentBounds };
 
-    // Calculate current size
-    const currentWidth = this.currentBounds.xMax - this.currentBounds.xMin + 1;
-    const currentHeight = this.currentBounds.yMax - this.currentBounds.yMin + 1;
-    const targetWidth = shrinkEvent.TARGET_SIZE.WIDTH;
-    const targetHeight = shrinkEvent.TARGET_SIZE.HEIGHT;
+    const plan = this.buildRingPlan(
+      this.initialBoundsForCurrentShrink,
+      shrinkEvent.TARGET_SIZE.WIDTH,
+      shrinkEvent.TARGET_SIZE.HEIGHT,
+      this.shrinkDuration ?? 0
+    );
 
-    // Calculate total shrink amount per side for each axis
-    const totalShrinkX = (currentWidth - targetWidth) / 2;  // 每边需要收缩的X格数
-    const totalShrinkY = (currentHeight - targetHeight) / 2;  // 每边需要收缩的Y格数
+    // 目标边界
+    this.targetBounds = { ...plan.targetBounds };
 
-    // Calculate target bounds
-    this.targetBounds = {
-      xMin: this.currentBounds.xMin + Math.floor(totalShrinkX),
-      xMax: this.currentBounds.xMax - Math.ceil(totalShrinkX),
-      yMin: this.currentBounds.yMin + Math.floor(totalShrinkY),
-      yMax: this.currentBounds.yMax - Math.ceil(totalShrinkY),
-    };
+    // 记录统一调度所需的参数（复用你现有字段名以减少改动）
+    this.phase1ShrinkAxis = plan.phase1ShrinkAxis; // 仅用于日志
+    this.phase1ShrinkAmount = plan.phase1Steps;    // 仅用于日志
+    this.phase2ShrinkAmount = plan.phase2Steps;    // 仅用于日志
+    this.phase1Duration = plan.phase1Duration;     // 仅用于日志
+    this.phase2Duration = plan.phase2Duration;     // 仅用于日志
 
-    // 设计圈式收缩：先收缩长边到与短边相等，再同时收缩
-    if (totalShrinkX > totalShrinkY) {
-      // X轴收缩更多，先收缩X轴
-      this.phase1ShrinkAxis = 'x';
-      this.phase1ShrinkAmount = totalShrinkX - totalShrinkY;  // 阶段1: X轴多收缩的部分
-      this.phase2ShrinkAmount = totalShrinkY;  // 阶段2: 两轴同时收缩的部分
-    } else if (totalShrinkY > totalShrinkX) {
-      // Y轴收缩更多，先收缩Y轴
-      this.phase1ShrinkAxis = 'y';
-      this.phase1ShrinkAmount = totalShrinkY - totalShrinkX;  // 阶段1: Y轴多收缩的部分
-      this.phase2ShrinkAmount = totalShrinkX;  // 阶段2: 两轴同时收缩的部分
-    } else {
-      // 两轴收缩相等，直接进入圆形收缩
-      this.phase1ShrinkAxis = 'none';
-      this.phase1ShrinkAmount = 0;
-      this.phase2ShrinkAmount = totalShrinkX;  // 直接同时收缩两轴
-    }
+    // 额外记录：统一调度步数（update 时要用）
+    // @ts-ignore: attach transient fields
+    (this as any)._unifiedStepsX = plan.stepsX;
+    // @ts-ignore
+    (this as any)._unifiedStepsY = plan.stepsY;
+    // @ts-ignore
+    (this as any)._unifiedTotalSteps = plan.totalSteps;
 
-    // 时间分配：按收缩步数比例分配时间
-    const totalSteps = Math.max(totalShrinkX, totalShrinkY);  // 总收缩步数
-    const phase1Steps = this.phase1ShrinkAmount ?? 0;  // 阶段1步数
-    const duration = this.shrinkDuration ?? 0;
+    console.log(`[SafeZone] Shrink planned: totalSteps=${plan.totalSteps}, duration=${this.shrinkDuration}`);
+    console.log(`[SafeZone] Phase1(axis=${this.phase1ShrinkAxis}): steps=${this.phase1ShrinkAmount}, ticks≈${this.phase1Duration}`);
+    console.log(`[SafeZone] Phase2(both): steps=${this.phase2ShrinkAmount}, ticks≈${this.phase2Duration}`);
+    console.log(`[SafeZone] Target bounds: (${this.targetBounds.xMin},${this.targetBounds.yMin})→(${this.targetBounds.xMax},${this.targetBounds.yMax})`);
 
-    if (totalSteps > 0 && duration > 0) {
-      this.phase1Duration = Math.round((phase1Steps / totalSteps) * duration);
-      this.phase2Duration = duration - this.phase1Duration;
-    } else {
-      this.phase1Duration = 0;
-      this.phase2Duration = 0;
-    }
-
-    // Verify the result
-    const actualWidth = this.targetBounds.xMax - this.targetBounds.xMin + 1;
-    const actualHeight = this.targetBounds.yMax - this.targetBounds.yMin + 1;
-
-    console.log(`[SafeZone] Ring-based shrinking from ${currentWidth}x${currentHeight} to ${targetWidth}x${targetHeight} (actual: ${actualWidth}x${actualHeight})`);
-    console.log(`[SafeZone] Phase1: ${this.phase1ShrinkAxis} axis, ${this.phase1ShrinkAmount} steps, ${this.phase1Duration} ticks`);
-    console.log(`[SafeZone] Phase2: both axes, ${this.phase2ShrinkAmount} steps, ${this.phase2Duration} ticks`);
-    console.log(`[SafeZone] Target bounds: (${this.targetBounds.xMin},${this.targetBounds.yMin}) to (${this.targetBounds.xMax},${this.targetBounds.yMax})`);
-
-    // Emit event for UI notification only
     eventBus.emit(GameEventType.UI_NOTIFICATION, "Safe zone is shrinking!");
   }
 
@@ -293,85 +263,60 @@ export class SafeZoneManager {
    */
   private updateShrinking(currentTick: number): void {
     if (!this.shrinkStartTick || !this.shrinkDuration || !this.targetBounds || !this.initialBoundsForCurrentShrink) return;
-    if (this.phase1Duration === undefined || this.phase2Duration === undefined) return;
-    if (this.phase1ShrinkAxis === undefined || this.phase1ShrinkAmount === undefined || this.phase2ShrinkAmount === undefined) return;
 
-    const elapsed = currentTick - this.shrinkStartTick;
-    const totalProgress = Math.min(elapsed / this.shrinkDuration, 1.0);
+    // 统一调度参数
+    const stepsX: number = (this as any)._unifiedStepsX ?? 0;
+    const stepsY: number = (this as any)._unifiedStepsY ?? 0;
+    const totalSteps: number = (this as any)._unifiedTotalSteps ?? Math.max(stepsX, stepsY);
 
-    if (totalProgress >= 1.0) {
-      // Shrinking complete
+    const startTick = this.shrinkStartTick;
+    const duration = this.shrinkDuration;
+    const elapsed = currentTick - startTick;
+
+    // 结束帧：必达目标
+    if (elapsed >= duration) {
       this.currentBounds = { ...this.targetBounds };
       this.isShrinking = false;
       this.shrinkStartTick = undefined;
       this.shrinkDuration = undefined;
       this.targetBounds = undefined;
       this.initialBoundsForCurrentShrink = undefined;
+
+      // 清理临时统一调度参数
+      delete (this as any)._unifiedStepsX;
+      delete (this as any)._unifiedStepsY;
+      delete (this as any)._unifiedTotalSteps;
+
+      // 兼容字段
       this.phase1Duration = undefined;
       this.phase2Duration = undefined;
       this.phase1ShrinkAxis = undefined;
       this.phase1ShrinkAmount = undefined;
       this.phase2ShrinkAmount = undefined;
+
       console.log(`[SafeZone] Ring shrinking complete. New bounds: (${this.currentBounds.xMin},${this.currentBounds.yMin}) to (${this.currentBounds.xMax},${this.currentBounds.yMax})`);
       return;
     }
 
-    // 判断当前处于哪个阶段
-    const previousBounds = { ...this.currentBounds };
-    let currentShrinkX = 0;
-    let currentShrinkY = 0;
+    const s = SafeZoneManager.stepsCompleted(elapsed, duration, totalSteps);
+    const { sx, sy } = SafeZoneManager.shrinkXYFromSteps(stepsX, stepsY, s);
 
-    if (this.phase1Duration > 0 && elapsed < this.phase1Duration) {
-      // 阶段1：只收缩长边
-      const phase1Progress = elapsed / this.phase1Duration;
-      const phase1ShrinkAmount = Math.round((this.phase1ShrinkAmount ?? 0) * phase1Progress);
-
-      if (this.phase1ShrinkAxis === 'x') {
-        currentShrinkX = phase1ShrinkAmount;
-        currentShrinkY = 0;
-      } else if (this.phase1ShrinkAxis === 'y') {
-        currentShrinkX = 0;
-        currentShrinkY = phase1ShrinkAmount;
-      }
-    } else {
-      // 阶段2：同时收缩两轴（圆形收缩）
-      const phase2Elapsed = elapsed - (this.phase1Duration ?? 0);
-      const phase2Progress = (this.phase2Duration ?? 0) > 0 ? Math.min(phase2Elapsed / (this.phase2Duration ?? 0), 1.0) : 1.0;
-      const phase2ShrinkAmount = Math.round((this.phase2ShrinkAmount ?? 0) * phase2Progress);
-
-      // 阶段1的收缩量（已完成）
-      if (this.phase1ShrinkAxis === 'x') {
-        currentShrinkX = (this.phase1ShrinkAmount ?? 0) + phase2ShrinkAmount;
-        currentShrinkY = phase2ShrinkAmount;
-      } else if (this.phase1ShrinkAxis === 'y') {
-        currentShrinkX = phase2ShrinkAmount;
-        currentShrinkY = (this.phase1ShrinkAmount ?? 0) + phase2ShrinkAmount;
-      } else {
-        // phase1ShrinkAxis === 'none'，直接进入圆形收缩
-        currentShrinkX = phase2ShrinkAmount;
-        currentShrinkY = phase2ShrinkAmount;
-      }
-    }
-
-    // 应用收缩到边界，保持对称性
+    const prev = { ...this.currentBounds };
     this.currentBounds = {
-      xMin: this.initialBoundsForCurrentShrink.xMin + Math.floor(currentShrinkX),
-      xMax: this.initialBoundsForCurrentShrink.xMax - Math.ceil(currentShrinkX),
-      yMin: this.initialBoundsForCurrentShrink.yMin + Math.floor(currentShrinkY),
-      yMax: this.initialBoundsForCurrentShrink.yMax - Math.ceil(currentShrinkY),
+      xMin: this.initialBoundsForCurrentShrink.xMin + sx,
+      xMax: this.initialBoundsForCurrentShrink.xMax - sx,
+      yMin: this.initialBoundsForCurrentShrink.yMin + sy,
+      yMax: this.initialBoundsForCurrentShrink.yMax - sy,
     };
 
-    // Emit food cleanup event when bounds actually change
-    const boundsChanged = (
-      previousBounds.xMin !== this.currentBounds.xMin ||
-      previousBounds.xMax !== this.currentBounds.xMax ||
-      previousBounds.yMin !== this.currentBounds.yMin ||
-      previousBounds.yMax !== this.currentBounds.yMax
-    );
-
-    if (boundsChanged) {
+    if (
+      prev.xMin !== this.currentBounds.xMin ||
+      prev.xMax !== this.currentBounds.xMax ||
+      prev.yMin !== this.currentBounds.yMin ||
+      prev.yMax !== this.currentBounds.yMax
+    ) {
       eventBus.emit(GameEventType.SAFE_ZONE_SHRINK_START, {
-        previousBounds: previousBounds,
+        previousBounds: prev,
         currentBounds: this.currentBounds
       });
     }
@@ -386,120 +331,96 @@ export class SafeZoneManager {
     targetHeight: number,
     duration: number
   ) {
-    const currentWidth = initialBounds.xMax - initialBounds.xMin + 1;
-    const currentHeight = initialBounds.yMax - initialBounds.yMin + 1;
+    const curW = initialBounds.xMax - initialBounds.xMin + 1;
+    const curH = initialBounds.yMax - initialBounds.yMin + 1;
 
-    const totalShrinkX = (currentWidth - targetWidth) / 2;
-    const totalShrinkY = (currentHeight - targetHeight) / 2;
+    // 用你原本的 floor/ceil 规则得到**最终目标边界**（与旧逻辑保持一致）
+    const shrinkXHalf = (curW - targetWidth) / 2;
+    const shrinkYHalf = (curH - targetHeight) / 2;
 
     const targetBounds: SafeZoneBounds = {
-      xMin: initialBounds.xMin + Math.floor(totalShrinkX),
-      xMax: initialBounds.xMax - Math.ceil(totalShrinkX),
-      yMin: initialBounds.yMin + Math.floor(totalShrinkY),
-      yMax: initialBounds.yMax - Math.ceil(totalShrinkY),
+      xMin: initialBounds.xMin + Math.floor(shrinkXHalf),
+      xMax: initialBounds.xMax - Math.ceil(shrinkXHalf),
+      yMin: initialBounds.yMin + Math.floor(shrinkYHalf),
+      yMax: initialBounds.yMax - Math.ceil(shrinkYHalf),
     };
 
-    let phase1ShrinkAxis: 'x' | 'y' | 'none';
-    let phase1Steps: number;
-    let phase2Steps: number;
-
-    if (totalShrinkX > totalShrinkY) {
-      phase1ShrinkAxis = 'x';
-      phase1Steps = totalShrinkX - totalShrinkY;
-      phase2Steps = totalShrinkY;
-    } else if (totalShrinkY > totalShrinkX) {
-      phase1ShrinkAxis = 'y';
-      phase1Steps = totalShrinkY - totalShrinkX;
-      phase2Steps = totalShrinkX;
-    } else {
-      phase1ShrinkAxis = 'none';
-      phase1Steps = 0;
-      phase2Steps = totalShrinkX;
-    }
-
-    const totalSteps = Math.max(totalShrinkX, totalShrinkY);
-    const phase1Duration = (totalSteps > 0 && duration > 0)
-      ? Math.round((phase1Steps / totalSteps) * duration)
-      : 0;
-    const phase2Duration = Math.max(duration - phase1Duration, 0);
+    // 将目标边界换算为**每边的整数步数**
+    const stepsX = targetBounds.xMin - initialBounds.xMin; // >= 0
+    const stepsY = targetBounds.yMin - initialBounds.yMin; // >= 0
+    const totalSteps = Math.max(stepsX, stepsY);           // 统一调度步数
 
     const boundsAtElapsed = (elapsed: number): SafeZoneBounds => {
       if (elapsed <= 0) return { ...initialBounds };
       if (elapsed >= duration) return { ...targetBounds };
 
-      let shrinkX = 0;
-      let shrinkY = 0;
-
-      if (phase1Duration > 0 && elapsed < phase1Duration) {
-        const p1 = elapsed / phase1Duration;
-        const a1 = Math.round(phase1Steps * p1);
-        if (phase1ShrinkAxis === 'x') {
-          shrinkX = a1;
-          shrinkY = 0;
-        } else if (phase1ShrinkAxis === 'y') {
-          shrinkX = 0;
-          shrinkY = a1;
-        }
-      } else {
-        const e2 = elapsed - phase1Duration;
-        const p2 = phase2Duration > 0 ? Math.min(e2 / phase2Duration, 1.0) : 1.0;
-        const a2 = Math.round(phase2Steps * p2);
-
-        if (phase1ShrinkAxis === 'x') {
-          shrinkX = phase1Steps + a2;
-          shrinkY = a2;
-        } else if (phase1ShrinkAxis === 'y') {
-          shrinkX = a2;
-          shrinkY = phase1Steps + a2;
-        } else {
-          shrinkX = a2;
-          shrinkY = a2;
-        }
-      }
+      const s = SafeZoneManager.stepsCompleted(elapsed, duration, totalSteps);
+      const { sx, sy } = SafeZoneManager.shrinkXYFromSteps(stepsX, stepsY, s);
 
       return {
-        xMin: initialBounds.xMin + Math.floor(shrinkX),
-        xMax: initialBounds.xMax - Math.ceil(shrinkX),
-        yMin: initialBounds.yMin + Math.floor(shrinkY),
-        yMax: initialBounds.yMax - Math.ceil(shrinkY),
+        xMin: initialBounds.xMin + sx,
+        xMax: initialBounds.xMax - sx,
+        yMin: initialBounds.yMin + sy,
+        yMax: initialBounds.yMax - sy,
       };
     };
 
     const firstChangeTick = (startTick: number): { tick: number; bounds: SafeZoneBounds } | undefined => {
-      const startBounds = boundsAtElapsed(0);
-      for (let t = 1; t <= duration; t++) {
-        const b = boundsAtElapsed(t);
-        if (
-          b.xMin !== startBounds.xMin ||
-          b.xMax !== startBounds.xMax ||
-          b.yMin !== startBounds.yMin ||
-          b.yMax !== startBounds.yMax
-        ) {
-          return { tick: startTick + t, bounds: b };
+      if (duration <= 0 || totalSteps <= 0) return undefined;
+      // 找到最早使 stepsCompleted(e) > 0 的 e
+      for (let e = 1; e <= duration; e++) {
+        const s = SafeZoneManager.stepsCompleted(e, duration, totalSteps);
+        if (s > 0) {
+          return { tick: startTick + e, bounds: boundsAtElapsed(e) };
         }
       }
-      // 理论上不会走到这里；兜底返回完成态
+      // 理论兜底（不应触达）
       return { tick: startTick + duration, bounds: { ...targetBounds } };
     };
 
+    // 为了兼容你现有的字段命名（phase1/phase2），我们输出等价信息，但**不再需要**相位时长
+    // phase1Steps = |stepsX - stepsY|（领先轴单轴阶段），phase2Steps = min(stepsX, stepsY)（双轴阶段）
+    const phase1Steps = Math.abs(stepsX - stepsY);
+    const phase2Steps = Math.min(stepsX, stepsY);
+    const phase1ShrinkAxis: 'x' | 'y' | 'none' =
+      stepsX > stepsY ? 'x' : stepsY > stepsX ? 'y' : 'none';
+
+    // 时长已用统一调度，不再必须；给出仅供日志/兼容参考（按比例切分，保证相加 = duration）
+    let phase1Duration = 0, phase2Duration = duration;
+    if (totalSteps > 0 && duration > 0) {
+      phase1Duration = Math.floor((phase1Steps / totalSteps) * duration);
+      phase2Duration = Math.max(duration - phase1Duration, 0);
+    }
+
     return {
       targetBounds,
+      // 兼容输出（非必须使用）
       phase1ShrinkAxis,
       phase1Steps,
       phase2Steps,
       phase1Duration,
       phase2Duration,
+      // 统一调度的关键输出
+      stepsX,
+      stepsY,
+      totalSteps,
       boundsAtElapsed,
       firstChangeTick,
     };
   }
 
   /**
-   * Checks for warning states before shrinking
+   * Checks for warning states before and during shrinking
    */
   private checkForWarnings(currentTick: number): void {
-    const nextShrinkTick = this.getNextShrinkTickForTick(currentTick);
+    // 如果当前正在收缩，直接显示警告
+    if (this.isShrinking) {
+      this.isWarning = true;
+      return;
+    }
 
+    // 检查是否即将开始收缩
+    const nextShrinkTick = this.getNextShrinkTickForTick(currentTick);
     if (nextShrinkTick) {
       const ticksUntilShrink = nextShrinkTick - currentTick;
       this.isWarning = ticksUntilShrink <= GameConfig.SAFE_ZONE.WARNING_TICKS_BEFORE_SHRINK && ticksUntilShrink > 0;
@@ -669,6 +590,27 @@ export class SafeZoneManager {
   private getNextShrinkTickForTick(currentTick: number): number | undefined {
     const nextEvent = this.getNextShrinkEvent(currentTick);
     return nextEvent ? nextEvent.startTick : undefined;
+  }
+
+  /** 完成的总步数（0..totalSteps），elapsed∈[0..duration]，END_TICK 必达 */
+  private static stepsCompleted(elapsed: number, duration: number, totalSteps: number): number {
+    if (duration <= 0 || totalSteps <= 0) return 0;
+    if (elapsed <= 0) return 0;
+    if (elapsed >= duration) return totalSteps;
+    return Math.floor((elapsed * totalSteps) / duration);
+  }
+
+  /** 由总完成步数 s 映射到每轴的收缩步数 (shrinkX, shrinkY)，采用领先轴优先、随后双轴同步 */
+  private static shrinkXYFromSteps(stepsX: number, stepsY: number, s: number): { sx: number; sy: number } {
+    const leadX = stepsX >= stepsY;            // 领先轴：步数更多的轴
+    const lead = Math.max(stepsX, stepsY);
+    const lag = Math.min(stepsX, stepsY);
+
+    const sLead = Math.min(s, lead);           // 领先轴累计步数
+    const sLag = Math.max(0, Math.min(lag, s - (lead - lag))); // 落后轴累计步数（只有在双轴阶段才增长）
+
+    if (leadX) return { sx: sLead, sy: sLag };
+    return { sx: sLag, sy: sLead };
   }
 
   /**

@@ -89,32 +89,97 @@ export class FoodRenderer implements EntityRenderer<Food> {
   ): void {
     const centerX = x + size / 2;
     const centerY = y + size / 2;
-    const radius = size / 3;
     
-    // 脉动效果
-    const pulseScale = 1 + Math.sin(this.frameCount * 0.1) * 0.1;
-    const adjustedRadius = radius * pulseScale;
+    // 学习钥匙的简洁动画风格 - 只要一个缓慢的脉动
+    const gentlePulse = 1 + Math.sin(this.frameCount * 0.05) * 0.06; // 类似钥匙的旋转频率
+    const glowAlpha = 0.4 + Math.sin(this.frameCount * 0.08) * 0.2; // 温和的发光变化
     
-    // 像素风格的星形
-    ctx.fillStyle = color;
+    // 胶囊主体尺寸 (去掉Math.floor，让动画更平滑)
+    const capsuleWidth = (size - 4) * gentlePulse;
+    const capsuleHeight = (size - 6) * gentlePulse;
+    const cornerRadius = Math.min(capsuleHeight / 2, 4);
     
-    // 绘制八个方向的像素点
-    for (let i = 0; i < 8; i++) {
-      const angle = (i / 8) * Math.PI * 2;
-      const px = centerX + Math.cos(angle) * adjustedRadius;
-      const py = centerY + Math.sin(angle) * adjustedRadius;
-      
-      ctx.fillRect(px - 2, py - 2, 4, 4);
-    }
+    // 绘制胶囊形状背景 (深绿色基底)
+    ctx.fillStyle = "#003322";
+    this.drawRoundedRect(ctx, 
+      centerX - capsuleWidth / 2, 
+      centerY - capsuleHeight / 2, 
+      capsuleWidth, 
+      capsuleHeight, 
+      cornerRadius
+    );
     
-    // 中心点
-    ctx.fillRect(centerX - 3, centerY - 3, 6, 6);
+    // 主胶囊体 (柔和绿色渐变效果)
+    const gradient = ctx.createLinearGradient(
+      centerX - capsuleWidth / 2, centerY - capsuleHeight / 2,
+      centerX + capsuleWidth / 2, centerY + capsuleHeight / 2
+    );
+    gradient.addColorStop(0, "#00cc77");
+    gradient.addColorStop(0.5, "#00aa55");
+    gradient.addColorStop(1, "#008844");
     
-    // 添加"G"表示Growth
-    ctx.fillStyle = "white";
-    ctx.fillRect(centerX - 1, centerY - 2, 2, 1);
-    ctx.fillRect(centerX - 1, centerY - 1, 1, 3);
-    ctx.fillRect(centerX, centerY + 1, 1, 1);
+    ctx.fillStyle = gradient;
+    const innerWidth = capsuleWidth - 2;
+    const innerHeight = capsuleHeight - 2;
+    this.drawRoundedRect(ctx, 
+      centerX - innerWidth / 2, 
+      centerY - innerHeight / 2, 
+      innerWidth, 
+      innerHeight, 
+      cornerRadius - 1
+    );
+    
+    // 简单的高光效果，不再变化
+    ctx.fillStyle = "rgba(255, 255, 255, 0.4)";
+    const highlightWidth = innerWidth - 4;
+    const highlightHeight = 2;
+    this.drawRoundedRect(ctx,
+      centerX - highlightWidth / 2,
+      centerY - innerHeight / 2 + 2,
+      highlightWidth,
+      highlightHeight,
+      1
+    );
+    
+    // 绘制围绕的能量粒子轨道 (非常缓慢的旋转)
+    // this.drawEnergyOrbit(ctx, centerX, centerY, size / 2 + 3, this.frameCount * 0.1);
+    
+    // 固定的"+"符号，不再闪烁
+    ctx.fillStyle = "#ffffff";
+    const crossSize = 4;
+    const crossThickness = 1;
+    
+    // 水平线
+    ctx.fillRect(
+      centerX - crossSize / 2, 
+      centerY - crossThickness / 2, 
+      crossSize, 
+      crossThickness
+    );
+    // 垂直线
+    ctx.fillRect(
+      centerX - crossThickness / 2, 
+      centerY - crossSize / 2, 
+      crossThickness, 
+      crossSize
+    );
+    
+    // 学习钥匙的发光点效果 - 简单的角落闪烁
+    ctx.fillStyle = `rgba(0, 255, 136, ${glowAlpha})`;
+    
+    // 四个角落的简单发光点，按顺序闪烁
+    const sparkleOffsets = [
+      { x: -size/2 + 2, y: -size/2 + 2 }, 
+      { x: size/2 - 2, y: -size/2 + 2 },
+      { x: size/2 - 2, y: size/2 - 2 }, 
+      { x: -size/2 + 2, y: size/2 - 2 }
+    ];
+    
+    sparkleOffsets.forEach((offset, index) => {
+      if (this.frameCount % 40 === index * 10) { // 更慢的闪烁节奏
+        ctx.fillRect(centerX + offset.x, centerY + offset.y, 2, 2);
+      }
+    });
   }
   
   private renderTrapFood(
@@ -124,28 +189,65 @@ export class FoodRenderer implements EntityRenderer<Food> {
     size: number, 
     color: string
   ): void {
-    // 像素风格的陷阱
-    ctx.fillStyle = color;
+    const centerX = x + size / 2;
+    const centerY = y + size / 2;
+    const pad = 2;
+    const innerSize = size - pad * 2;
     
-    // 绘制三角形轮廓
-    const pad = 3;
+    // 脉动效果让陷阱更危险
+    const pulseScale = 1 + Math.sin(this.frameCount * 0.15) * 0.08;
+    const effectiveSize = innerSize * pulseScale;
+    const offset = (innerSize - effectiveSize) / 2;
     
-    // 基础三角形
-    const path = new Path2D();
-    path.moveTo(x + size / 2, y + pad);
-    path.lineTo(x + size - pad, y + size - pad);
-    path.lineTo(x + pad, y + size - pad);
-    path.closePath();
+    // 基础暗色背景
+    ctx.fillStyle = "#2a1a1a";
+    ctx.fillRect(x + pad + offset, y + pad + offset, effectiveSize, effectiveSize);
     
-    ctx.fill(path);
+    // 现代像素风格的危险图案 - 骷髅头
+    ctx.fillStyle = "#ff4444";
+    const skullX = centerX - 4;
+    const skullY = centerY - 4;
+    
+    // 骷髅头轮廓 (8x8 像素)
+    const skullPattern = [
+      "  ████  ",
+      " ██████ ",
+      "████████",
+      "██ ██ ██",
+      "████████",
+      "██ ██ ██",
+      " █ ██ █ ",
+      "  ████  "
+    ];
+    
+    skullPattern.forEach((row, rowIndex) => {
+      [...row].forEach((pixel, colIndex) => {
+        if (pixel === "█") {
+          ctx.fillRect(skullX + colIndex, skullY + rowIndex, 1, 1);
+        }
+      });
+    });
+    
+    // 添加红色发光边框
     ctx.strokeStyle = "#ff0000";
     ctx.lineWidth = 1;
-    ctx.stroke(path);
+    ctx.strokeRect(x + pad + offset, y + pad + offset, effectiveSize, effectiveSize);
     
-    // 像素风格的危险符号
-    ctx.fillStyle = "#ff0000";
-    ctx.fillRect(x + size / 2 - 1, y + size / 2 - 3, 2, 4);
-    ctx.fillRect(x + size / 2 - 1, y + size / 2 + 2, 2, 2);
+    // 外层警告边框
+    ctx.strokeStyle = "#ffaa00";
+    ctx.lineWidth = 1;
+    ctx.setLineDash([2, 2]);
+    ctx.strokeRect(x, y, size, size);
+    ctx.setLineDash([]);
+    
+    // 危险警告点在四个角落
+    if (this.frameCount % 30 < 15) {
+      ctx.fillStyle = "#ff0000";
+      ctx.fillRect(x + 1, y + 1, 2, 2);
+      ctx.fillRect(x + size - 3, y + 1, 2, 2);
+      ctx.fillRect(x + 1, y + size - 3, 2, 2);
+      ctx.fillRect(x + size - 3, y + size - 3, 2, 2);
+    }
   }
   
   private renderSparkle(ctx: CanvasRenderingContext2D, x: number, y: number, size: number): void {
@@ -226,5 +328,67 @@ export class FoodRenderer implements EntityRenderer<Food> {
     if (color === "black") return "#666666";
     
     return color;
+  }
+
+  private drawRoundedRect(
+    ctx: CanvasRenderingContext2D, 
+    x: number, 
+    y: number, 
+    width: number, 
+    height: number, 
+    radius: number
+  ): void {
+    // 像素风格的圆角矩形实现
+    if (radius <= 0) {
+      ctx.fillRect(x, y, width, height);
+      return;
+    }
+    
+    // 限制圆角半径
+    radius = Math.min(radius, Math.min(width, height) / 2);
+    
+    // 使用像素化的圆角效果
+    // 主体矩形
+    ctx.fillRect(x + radius, y, width - 2 * radius, height);
+    ctx.fillRect(x, y + radius, width, height - 2 * radius);
+    
+    // 四个角落的圆角效果 (简化为45度切角)
+    if (radius >= 2) {
+      // 左上角
+      ctx.fillRect(x + 1, y + 1, radius - 1, radius - 1);
+      // 右上角  
+      ctx.fillRect(x + width - radius, y + 1, radius - 1, radius - 1);
+      // 左下角
+      ctx.fillRect(x + 1, y + height - radius, radius - 1, radius - 1);
+      // 右下角
+      ctx.fillRect(x + width - radius, y + height - radius, radius - 1, radius - 1);
+    }
+  }
+
+  private drawEnergyOrbit(
+    ctx: CanvasRenderingContext2D, 
+    centerX: number, 
+    centerY: number, 
+    radius: number, 
+    angle: number
+  ): void {
+    // 绘制3个围绕的能量粒子
+    const particleCount = 3;
+    const particleSize = 2;
+    
+    for (let i = 0; i < particleCount; i++) {
+      const particleAngle = angle + (i * Math.PI * 2 / particleCount);
+      const px = centerX + Math.cos(particleAngle) * radius;
+      const py = centerY + Math.sin(particleAngle) * radius;
+      
+      // 粒子柔和发光效果 (非常缓慢的闪烁)
+      const alpha = 0.5 + Math.sin(angle * 0.5 + i) * 0.1;
+      ctx.fillStyle = `rgba(0, 204, 119, ${alpha})`;
+      ctx.fillRect(px - particleSize / 2, py - particleSize / 2, particleSize, particleSize);
+      
+      // 粒子核心
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(px - 0.5, py - 0.5, 1, 1);
+    }
   }
 }
