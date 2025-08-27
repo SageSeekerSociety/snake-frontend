@@ -275,7 +275,15 @@ export class SafeZoneManager {
 
     // 结束帧：必达目标
     if (elapsed >= duration) {
+      const prev = { ...this.currentBounds };
       this.currentBounds = { ...this.targetBounds };
+      
+      // 强制触发一次清理事件，确保收缩完成时清理所有安全区外的食物
+      eventBus.emit(GameEventType.SAFE_ZONE_SHRINK_START, {
+        previousBounds: prev,
+        currentBounds: this.currentBounds
+      });
+      
       this.isShrinking = false;
       this.shrinkStartTick = undefined;
       this.shrinkDuration = undefined;
