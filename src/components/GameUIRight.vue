@@ -22,19 +22,24 @@
           </div>
           <div class="score-status">
             <div class="score-value">{{ snake.snake.getScore() }}分</div>
-            <div class="score-shield">
-              <div class="shield-bar cooldown" :style="{
-                width: getShieldCooldownPercent(snake.snake),
-                opacity: snake.snake.getShieldCooldown() > 0 ? 1 : 0.2
-              }"></div>
-              <div
-                class="shield-bar duration"
-                :class="{ 'initial-shield': isInitialShield(snake.snake) }"
-                :style="{
-                  width: getShieldDurationPercent(snake.snake),
-                  opacity: snake.snake.getShieldDuration() > 0 ? 1 : 0
-                }"
-              ></div>
+            <div class="score-indicators">
+              <div class="key-indicator" :class="{ 'has-key': hasKey(snake.snake) }">
+                🗝️
+              </div>
+              <div class="score-shield">
+                <div class="shield-bar cooldown" :style="{
+                  width: getShieldCooldownPercent(snake.snake),
+                  opacity: snake.snake.getShieldCooldown() > 0 ? 1 : 0.2
+                }"></div>
+                <div
+                  class="shield-bar duration"
+                  :class="{ 'initial-shield': isInitialShield(snake.snake) }"
+                  :style="{
+                    width: getShieldDurationPercent(snake.snake),
+                    opacity: snake.snake.getShieldDuration() > 0 ? 1 : 0
+                  }"
+                ></div>
+              </div>
             </div>
           </div>
         </div>
@@ -58,7 +63,7 @@ const sortedSnakes = computed(() => {
   return snakes.value.map((snake, index) => ({
     snake,
     index
-  })).sort((a, b) => b.snake.getScore() - a.snake.getScore());
+  })).sort((a, b) => b.snake.getScore() - a.snake.getScore()) as { snake: Snake; index: number }[];
 });
 
 // 获取对局内编号（从1开始，补全两位）
@@ -147,6 +152,11 @@ const isInitialShield = (snake: any): boolean => {
     console.error("判断初始护盾出错:", err);
     return false;
   }
+};
+
+// 检查蛇是否持有钥匙
+const hasKey = (snake: Snake): boolean => {
+    return snake.hasKey();
 };
 
 // 更新计分板
@@ -323,13 +333,48 @@ onMounted(() => {
   white-space: nowrap;
 }
 
+/* 指示器容器 */
+.score-indicators {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+}
+
 .score-shield {
   height: 6px;
-  width: 100%;
+  flex: 1;
   background-color: rgba(0, 0, 0, 0.3);
   position: relative;
   overflow: hidden;
   margin-top: 2px;
+}
+
+/* 钥匙指示器 */
+.key-indicator {
+  width: 12px;
+  height: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 8px;
+  opacity: 0.3;
+  transition: all 0.3s ease;
+  filter: grayscale(1) brightness(0.6);
+  flex-shrink: 0;
+}
+
+.key-indicator.has-key {
+  opacity: 1;
+  filter: none;
+  animation: keyGlow 2s infinite;
+  text-shadow: 0 0 4px #ffd700;
+}
+
+@keyframes keyGlow {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
 }
 
 .shield-bar {
