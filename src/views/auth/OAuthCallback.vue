@@ -25,9 +25,11 @@
 import { ref, onMounted } from 'vue';
 import { useRouter, useRoute } from 'vue-router';
 import { authService } from '../../services/api';
+import { useAuth } from '../../stores/auth';
 
 const router = useRouter();
 const route = useRoute();
+const { updateAuthState } = useAuth();
 
 const message = ref('处理中...');
 const redirectMessage = ref('正在重定向到主页...');
@@ -53,9 +55,9 @@ const handleOAuthCallback = async () => {
     }
     
     try {
-      // 获取用户信息
-      const response = await authService.getCurrentUser();
-      localStorage.setItem("userData", JSON.stringify(response));
+      // 获取用户信息并更新认证状态
+      const user = await authService.getCurrentUser();
+      updateAuthState(user, token);
     } catch (err) {
       console.error('获取用户信息失败:', err);
     }

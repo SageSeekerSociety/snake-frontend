@@ -45,7 +45,7 @@
 
       <!-- OAuth 登录部分 -->
       <div class="oauth-section" v-if="oauthProviders.length > 0">
-        <div class="oauth-divider">
+        <div class="oauth-divider" v-if="runtimeConfig.ENABLE_USERNAME_LOGIN">
           <span>或使用以下方式登录</span>
         </div>
         <div class="oauth-buttons">

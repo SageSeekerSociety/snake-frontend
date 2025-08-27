@@ -1,14 +1,6 @@
 import { reactive, readonly } from 'vue';
 import { authService } from '../services/api';
-
-// 用户数据类型定义
-interface User {
-  id: number;
-  username: string;
-  nickname: string;
-  avatarId: number;
-  intro: string;
-}
+import { User } from '../types/User';
 
 // 认证状态类型
 interface AuthState {
@@ -47,6 +39,16 @@ initializeAuth();
 
 // 操作方法
 const actions = {
+  // OAuth登录后更新状态
+  updateAuthState: (user: User, token: string) => {
+    localStorage.setItem('accessToken', token);
+    localStorage.setItem('userData', JSON.stringify(user));
+    
+    state.user = user;
+    state.isAuthenticated = true;
+    state.error = null;
+  },
+
   // 注册方法
   async register(username: string, password: string, nickname: string, emailCode: string): Promise<boolean> {
     state.loading = true;
