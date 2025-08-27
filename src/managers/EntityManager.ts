@@ -111,21 +111,21 @@ export class EntityManager implements IEntityQuery {
 
       if (isOutsideCurrentZone) {
         foodToCleanup.push(food);
-        console.log(`[EntityManager] Marking ${food.getType()} food for cleanup at (${gridX}, ${gridY}) - outside current bounds`);
+        // console.log(`[EntityManager] Marking ${food.getType()} food for cleanup at (${gridX}, ${gridY}) - outside current bounds`);
       }
     }
 
     // Remove all marked food items
     for (const food of foodToCleanup) {
-      console.log(`[EntityManager] Removing food at (${Math.floor(food.getPosition().x / boxSize)}, ${Math.floor(food.getPosition().y / boxSize)})`);
+      // console.log(`[EntityManager] Removing food at (${Math.floor(food.getPosition().x / boxSize)}, ${Math.floor(food.getPosition().y / boxSize)})`);
       this.removeFood(food);
       cleanedUpCount++;
     }
 
-    if (cleanedUpCount > 0) {
-      console.log(`[EntityManager] Successfully cleaned up ${cleanedUpCount} food items outside current safe zone`);
-      console.log(`[EntityManager] Current safe zone bounds: (${data.currentBounds.xMin}, ${data.currentBounds.yMin}) to (${data.currentBounds.xMax}, ${data.currentBounds.yMax})`);
-    }
+    // if (cleanedUpCount > 0) {
+    //   console.log(`[EntityManager] Successfully cleaned up ${cleanedUpCount} food items outside current safe zone`);
+    //   console.log(`[EntityManager] Current safe zone bounds: (${data.currentBounds.xMin}, ${data.currentBounds.yMin}) to (${data.currentBounds.xMax}, ${data.currentBounds.yMax})`);
+    // }
   }
 
   // --- Accessors ---
@@ -178,9 +178,9 @@ export class EntityManager implements IEntityQuery {
     initialFood.forEach((food) => this.addFood(food));
     snakes.forEach((snake) => this.addSnake(snake));
 
-    console.log(
-      `EntityManager initialized with ${snakes.length} snakes, ${obstacles.length} obstacles, ${initialFood.length} food items.`
-    );
+    // console.log(
+    //   `EntityManager initialized with ${snakes.length} snakes, ${obstacles.length} obstacles, ${initialFood.length} food items.`
+    // );
   }
 
   addSnake(snake: Snake): void {
@@ -257,17 +257,17 @@ export class EntityManager implements IEntityQuery {
       case FoodType.TRAP:
         const trapScore = -10 * vortexMultiplier; // Apply multiplier to trap penalty
         snake.addScore(trapScore);
-        if (vortexMultiplier > 1.0) {
-          console.log(`[VortexField] Applied ${vortexMultiplier}x multiplier to trap penalty: ${trapScore}`);
-        }
+        // if (vortexMultiplier > 1.0) {
+        //   console.log(`[VortexField] Applied ${vortexMultiplier}x multiplier to trap penalty: ${trapScore}`);
+        // }
         break;
       default: // Normal food
         const baseScore = food.getValue() as number;
         const finalScore = baseScore * vortexMultiplier;
         snake.addScore(finalScore);
-        if (vortexMultiplier > 1.0) {
-          console.log(`[VortexField] Applied ${vortexMultiplier}x multiplier to food score: ${baseScore} -> ${finalScore}`);
-        }
+        // if (vortexMultiplier > 1.0) {
+        //   console.log(`[VortexField] Applied ${vortexMultiplier}x multiplier to food score: ${baseScore} -> ${finalScore}`);
+        // }
     }
     this.removeFood(food);
     // Optionally emit event
@@ -317,7 +317,7 @@ export class EntityManager implements IEntityQuery {
    */
   private handleSnakeDeathCleanup(snake: Snake): void {
     const snakeName = getSnakeDisplayName(snake, this.snakes);
-    console.log(`[Cleanup] Cleaning up resources for ${snakeName}`);
+    // console.log(`[Cleanup] Cleaning up resources for ${snakeName}`);
 
     // 1. Remove all segments from the spatial grid
     const bodyToRemove = snake.getBody(); // Get the body segments used during animation
@@ -493,7 +493,7 @@ export class EntityManager implements IEntityQuery {
       this.boundHandleSnakeKillRequest
     );
 
-    console.log("EntityManager fully disposed");
+    // console.log("EntityManager fully disposed");
   }
 
   /**

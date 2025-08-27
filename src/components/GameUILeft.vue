@@ -44,7 +44,6 @@ const allSnakes = ref<Snake[]>([] as Snake[]);
 
 // 添加通知
 const addNotification = (message: string) => {
-  console.log("[GameUILeft] New notification:", message);
   if (typeof message === "string") {
     // 解析占位符为带颜色的HTML
     const parsedMessage = parseSnakePlaceholders(message, allSnakes.value as Snake[]);

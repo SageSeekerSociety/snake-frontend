@@ -59,11 +59,11 @@ export class CollisionDetector {
       if (this.vortexFieldManager) {
         const zoneType = this.vortexFieldManager.getPositionZoneType(head);
         if (zoneType === VortexZoneType.LETHAL_SINGULARITY) {
-          console.log(
-            `[Collision][Fatal][Vortex] Snake ${snake.getMetadata().name} entered lethal singularity at (${
-              head.x / boxSize
-            }, ${head.y / boxSize})`
-          );
+          // console.log(
+          //   `[Collision][Fatal][Vortex] Snake ${snake.getMetadata().name} entered lethal singularity at (${
+          //     head.x / boxSize
+          //   }, ${head.y / boxSize})`
+          // );
           collisionResults.push({ 
             type: "wall", // Using "wall" type as it's also an absolute fatal collision 
             snake: snake, 
@@ -82,11 +82,11 @@ export class CollisionDetector {
         head.y < 0 ||
         head.y >= rows * boxSize
       ) {
-        console.log(
-          `[Collision][Fatal] Snake ${snake.getMetadata().name} hit wall at (${
-            head.x / boxSize
-          }, ${head.y / boxSize})`
-        );
+        // console.log(
+        //   `[Collision][Fatal] Snake ${snake.getMetadata().name} hit wall at (${
+        //     head.x / boxSize
+        //   }, ${head.y / boxSize})`
+        // );
         collisionResults.push({ type: "wall", snake: snake, position: head });
         fatalCollisionOccurred = true;
         fatallyCollidedSnakes.add(snake); // Mark as fatally collided
@@ -101,11 +101,11 @@ export class CollisionDetector {
         if (item.position.x === head.x && item.position.y === head.y) {
           switch (item.type) {
             case "obstacle":
-              console.log(
-                `[Collision][Fatal] Snake ${
-                  snake.getMetadata().name
-                } hit obstacle at (${head.x / boxSize}, ${head.y / boxSize})`
-              );
+              // console.log(
+              //   `[Collision][Fatal] Snake ${
+              //     snake.getMetadata().name
+              //   } hit obstacle at (${head.x / boxSize}, ${head.y / boxSize})`
+              // );
               collisionResults.push({
                 type: "obstacle",
                 snake: snake,
@@ -150,11 +150,11 @@ export class CollisionDetector {
                   position: head,
                 });
               } else {
-                console.log(
-                  `[Collision][Fatal] Snake ${
-                    snake.getMetadata().name
-                  } hit treasure (no key) at (${head.x / boxSize}, ${head.y / boxSize})`
-                );
+                // console.log(
+                //   `[Collision][Fatal] Snake ${
+                //     snake.getMetadata().name
+                //   } hit treasure (no key) at (${head.x / boxSize}, ${head.y / boxSize})`
+                // );
                 collisionResults.push({
                   type: "treasure_fatal",
                   snake: snake,
@@ -184,13 +184,13 @@ export class CollisionDetector {
                 
                 // 如果两条蛇都有护盾，则都免疫碰撞，不报告碰撞
                 if (hasShield && otherHasShield) {
-                  console.log(`[SHIELD] Both snakes ${snake.getMetadata().name} and ${otherSnakeHead.getMetadata().name} have shields, both immune to head collision`);
+                  // console.log(`[SHIELD] Both snakes ${snake.getMetadata().name} and ${otherSnakeHead.getMetadata().name} have shields, both immune to head collision`);
                   // 不报告碰撞，继续检查其他碰撞
                 } else {
                   // 至少有一条蛇没有护盾，报告碰撞让GameManager处理
-                  console.log(
-                    `[Collision] Snake ${snake.getMetadata().name} head collision with Snake ${otherSnakeHead.getMetadata().name}`
-                  );
+                  // console.log(
+                  //   `[Collision] Snake ${snake.getMetadata().name} head collision with Snake ${otherSnakeHead.getMetadata().name}`
+                  // );
                   collisionResults.push({
                     type: "snake",
                     snake: snake,
@@ -215,16 +215,16 @@ export class CollisionDetector {
                   
                   // 如果有护盾或在涡流场内，可以穿过蛇身体
                   if (hasShield || isInVortexField) {
-                    if (hasShield) {
-                      console.log(`[SHIELD] Snake ${snake.getMetadata().name} shield passed through body of Snake ${collidedSnake.getMetadata().name}`);
-                    } else {
-                      console.log(`[VORTEX] Snake ${snake.getMetadata().name} passed through body of Snake ${collidedSnake.getMetadata().name} in vortex field`);
-                    }
+                    // if (hasShield) {
+                    //   console.log(`[SHIELD] Snake ${snake.getMetadata().name} shield passed through body of Snake ${collidedSnake.getMetadata().name}`);
+                    // } else {
+                    //   console.log(`[VORTEX] Snake ${snake.getMetadata().name} passed through body of Snake ${collidedSnake.getMetadata().name} in vortex field`);
+                    // }
                   } else {
                     // 没有护盾且不在涡流场：与任何蛇的身体部分碰撞都是致命的
-                    console.log(
-                      `[Collision][Fatal] Snake ${snake.getMetadata().name} hit body of Snake ${collidedSnake.getMetadata().name}`
-                    );
+                    // console.log(
+                    //   `[Collision][Fatal] Snake ${snake.getMetadata().name} hit body of Snake ${collidedSnake.getMetadata().name}`
+                    // );
                     collisionResults.push({
                       type: "snake",
                       snake: snake,

@@ -95,9 +95,9 @@ export class DecisionRequestCoordinator {
         if (!sessionId)
           throw new Error("Session ID is missing in the first batch.");
 
-        console.log(
-          `Establishing persistent SSE connection for session ${sessionId}...`
-        );
+        // console.log(
+        //   `Establishing persistent SSE connection for session ${sessionId}...`
+        // );
         this.activeSseConnection = sandboxService.listenToExecutionStream(
           sessionId,
           0, // Always listen from the beginning of the game.
@@ -213,7 +213,7 @@ export class DecisionRequestCoordinator {
     if (this.activeSseConnection) {
       this.activeSseConnection.close();
       this.activeSseConnection = null;
-      console.log("Coordinator: SSE connection closed.");
+      // console.log("Coordinator: SSE connection closed.");
     }
   }
 
