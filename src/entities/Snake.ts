@@ -193,7 +193,7 @@ export class Snake extends Entity {
       newHead.y >= rows * boxSize
     ) {
       // Mark snake as dead if out of bounds
-      this.die("hit wall");
+      // this.die("hit wall");
       // Notify game manager
       eventBus.emit(GameEventType.SNAKE_KILL_REQUEST, { snake: this, reason: 'hit wall' });
       return;

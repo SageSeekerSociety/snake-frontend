@@ -381,7 +381,9 @@ export class GameManager {
 
         const snakeName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
         console.log(`[SafeZone] ${snakeName} violated safe zone at (${Math.floor(headPosition.x / 20)}, ${Math.floor(headPosition.y / 20)})`);
-        this.startDeathAnimation(snake, "left the safe zone");
+        // Handle treasure drop and delegate death handling to EntityManager
+        this.treasureSystem.handleSnakeDeath(snake);
+        this.entityManager.killSnake(snake, "left the safe zone");
       }
     }
   }
@@ -469,7 +471,7 @@ export class GameManager {
 
 
   /**
-   * Handles a fatal collision by starting death animation
+   * Handles a fatal collision by delegating to EntityManager
    */
   private handleFatalCollisionWithAnimation(result: CollisionResult): void {
     // Don't kill snakes that are already dying
@@ -510,8 +512,10 @@ export class GameManager {
             } else if (snakeHasShield && !collidedSnakeHasShield) {
               // Only result.snake has shield, kill the other snake
               const currentSnakePlaceholder = createSnakePlaceholder(result.snake);
-              deathReason = `hit by shielded ${currentSnakePlaceholder}`;
-              this.startDeathAnimation(collidedSnake, deathReason);
+              const otherReason = `hit by shielded ${currentSnakePlaceholder}`;
+              // Handle treasure drop before killing
+              this.treasureSystem.handleSnakeDeath(collidedSnake);
+              this.entityManager.killSnake(collidedSnake, otherReason);
               return;
             } else if (!snakeHasShield && collidedSnakeHasShield) {
               // Only collidedSnake has shield, kill result.snake
@@ -521,7 +525,9 @@ export class GameManager {
               deathReason = `hit ${collidedSnakePlaceholder}`;
               const currentSnakePlaceholder = createSnakePlaceholder(result.snake);
               const otherReason = `hit ${currentSnakePlaceholder}`;
-              this.startDeathAnimation(collidedSnake, otherReason);
+              // Handle treasure drop for both snakes
+              this.treasureSystem.handleSnakeDeath(collidedSnake);
+              this.entityManager.killSnake(collidedSnake, otherReason);
             }
           } else {
             deathReason = `hit ${collidedSnakePlaceholder}`;
@@ -534,33 +540,11 @@ export class GameManager {
         deathReason = "unknown collision";
     }
 
-    this.startDeathAnimation(result.snake, deathReason);
+    // Handle treasure drop and delegate death handling to EntityManager
+    this.treasureSystem.handleSnakeDeath(result.snake);
+    this.entityManager.killSnake(result.snake, deathReason);
   }
 
-  /**
-   * Starts the death animation for a snake
-   */
-  private startDeathAnimation(snake: Snake, reason: string): void {
-    if (!snake.isAlive() || snake.isDyingAnimation()) {
-      return;
-    }
-
-    const displayName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
-    console.log(`[DEATH] Starting death animation for ${displayName}: ${reason}`);
-    
-    // Handle key drop if snake has one
-    this.treasureSystem.handleSnakeDeath(snake);
-
-    // Start the death animation (Snake.die() method)
-    snake.die(reason);
-
-    // Emit notification with placeholder
-    const snakePlaceholder = createSnakePlaceholder(snake);
-    eventBus.emit(
-      GameEventType.UI_NOTIFICATION,
-      `${snakePlaceholder} ${reason}`
-    );
-  }
 
   /**
    * Handles a single collision (food, key, treasure)
