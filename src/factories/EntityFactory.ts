@@ -3,7 +3,7 @@ import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
 import { Position } from "../types/Position";
 import { GameConfig, Direction, FoodType } from "../config/GameConfig";
-import { User } from "../types/User";
+import { Player } from "../types/User";
 import {
   AIDecisionStrategy,
   APIDecisionStrategy,
@@ -40,7 +40,7 @@ export class EntityFactory {
    * @returns An array of Snake instances.
    */
   createInitialSnakes(
-    selectedUsers: User[] | undefined,
+    selectedUsers: Player[] | undefined,
     clock: GameClock,
     coordinator: DecisionRequestCoordinator,
     gameSessionId: string
@@ -94,7 +94,7 @@ export class EntityFactory {
     clock: GameClock,
     coordinator: DecisionRequestCoordinator,
     gameSessionId: string,
-    userData?: User,
+    userData?: Player,
   ): Snake {
     const { x, y } = this.calculatePosition(radius, angle);
     const direction = this.getInitialDirection(x, y);

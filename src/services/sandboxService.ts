@@ -6,7 +6,7 @@ import { Obstacle } from "../entities/Obstacle";
 import { TreasureChest } from "../entities/TreasureChest";
 import { Key } from "../entities/Key";
 import { SafeZoneAlgorithmInfo } from "../types/GameState";
-import { User, PlayersResponse } from "../types/User";
+import { PlayersResponse, Player } from "../types/User";
 import { VortexFieldApiData } from "../types/VortexField";
 import { SSE } from "sse.js";
 import {
@@ -25,7 +25,7 @@ export const sandboxService = {
    * Fetches the list of all players/submitters.
    * @returns A promise that resolves to an array of User objects.
    */
-  getSubmitters: async (): Promise<User[]> => {
+  getSubmitters: async (): Promise<Player[]> => {
     const response = await sandboxClient.get<PlayersResponse>("/players");
     if (response.data.code === 200) {
       return response.data.data;

@@ -1,8 +1,6 @@
 import { GameRecording, GameRecordingFrame } from "../types/GameRecording";
 import { GameState } from "../types/GameState";
-import { User } from "../types/User";
-import { TreasureChest } from "../entities/TreasureChest";
-import { Key } from "../entities/Key";
+import { Player } from "../types/User";
 
 // IndexedDB database name and store name
 const DB_NAME = "SnakeGameDB";
@@ -52,7 +50,7 @@ export class GameRecordingService {
    * Start recording a new game session
    */
   startRecording(
-    players: User[], 
+    players: Player[], 
     totalTicks: number, 
     initialGameState?: GameState,
   ): void {
@@ -307,7 +305,7 @@ export class GameRecordingService {
   /**
    * Cleans player data to ensure it's serializable
    */
-  private cleanPlayers(players: User[]): User[] {
+  private cleanPlayers(players: Player[]): Player[] {
     return players.map(player => ({
       userId: player.userId,
       username: player.username,

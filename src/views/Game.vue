@@ -169,7 +169,7 @@ import GameUILeft from "../components/GameUILeft.vue";
 import GameUIRight from "../components/GameUIRight.vue";
 import GameRankings from "../components/GameRankings.vue";
 import { sandboxService } from "../services/api";
-import { User } from "../types/User";
+import { Player } from "../types/User";
 import { eventBus, GameEventType } from "../core/EventBus";
 
 interface FinalScore {
@@ -186,8 +186,8 @@ const batchUsernames = ref<string>("");
 // API相关状态
 const isLoading = ref(true);
 const errorMessage = ref("");
-const availableUsers = ref<User[]>([]);
-const selectedUsers = ref<User[]>([]);
+const availableUsers = ref<Player[]>([]);
+const selectedUsers = ref<Player[]>([]);
 const gameStarted = ref(false);
 const gameCanvas = ref<HTMLCanvasElement | null>(null);
 const gameManager = ref<GameManager | null>(null);
@@ -236,7 +236,7 @@ const getSnakeColor = (userId: number) => {
 };
 
 // 切换用户选择状态
-const toggleUserSelection = (user: User) => {
+const toggleUserSelection = (user: Player) => {
   const index = selectedUsers.value.findIndex(u => u.userId === user.userId);
 
   if (index === -1) {
@@ -256,7 +256,7 @@ const isSelected = (userId: number) => {
 };
 
 // 移除已选择的蛇
-const removeSelectedSnake = (user: User) => {
+const removeSelectedSnake = (user: Player) => {
   const index = selectedUsers.value.findIndex(u => u.userId === user.userId);
   if (index !== -1) {
     selectedUsers.value.splice(index, 1);

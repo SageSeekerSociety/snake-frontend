@@ -144,24 +144,6 @@ const avatarPreviewUrl = ref('');
 const isUploading = ref(false);
 const defaultAvatarId = ref(1); // 默认头像ID
 
-// 生成头像颜色
-const avatarColors = [
-  "#4ade80", // 绿色
-  "#ef4444", // 红色
-  "#3b82f6", // 蓝色
-  "#f59e0b", // 橙色
-  "#8b5cf6", // 紫色
-  "#10b981", // 深绿色
-  "#06b6d4", // 青色
-  "#f43f5e", // 粉色
-  "#f97316", // 橙红色
-  "#14b8a6"  // 蓝绿色
-];
-
-const getAvatarColor = (avatarId: number) => {
-  return avatarColors[avatarId % avatarColors.length];
-};
-
 // 获取头像URL
 const getAvatarUrl = (avatarId: number) => {
   return avatarService.getAvatarUrl(avatarId);
@@ -169,15 +151,7 @@ const getAvatarUrl = (avatarId: number) => {
 
 // 获取默认头像ID
 const getDefaultAvatarId = async () => {
-  try {
-    const response = await avatarService.getDefaultAvatarId();
-    if (response.data && response.data.avatarId) {
-      return response.data.avatarId;
-    }
-  } catch (err) {
-    console.error('获取默认头像ID失败:', err);
-  }
-  return 1; // 如果获取失败，返回默认值1
+  return await avatarService.getDefaultAvatarId();
 };
 
 // 获取可用的头像ID列表
@@ -200,15 +174,10 @@ const fetchAvatarIds = async () => {
         avatarIds.unshift(defaultId);
       }
       availableAvatarIds.value = avatarIds;
-    } else {
-      // 如果API返回为空，使用默认的10个头像ID
-      availableAvatarIds.value = Array.from({ length: 10 }, (_, i) => i);
     }
   } catch (err: any) {
     console.error('获取头像列表失败:', err);
     avatarError.value = '获取头像列表失败，使用默认头像';
-    // 使用默认的10个头像ID
-    availableAvatarIds.value = Array.from({ length: 10 }, (_, i) => i);
   } finally {
     isLoadingAvatars.value = false;
   }
@@ -260,10 +229,10 @@ const uploadAvatarFile = async () => {
 
   try {
     const response = await avatarService.uploadAvatar(selectedAvatarFile.value);
-
-    if (response && response.id) {
+    console.log('上传头像响应:', response);
+    if (response && response.data.avatarId) {
       // 上传成功，设置新的头像ID
-      form.value.avatarId = response.id;
+      form.value.avatarId = response.data.avatarId;
       success.value = '头像上传成功';
 
       // 清理预览
@@ -272,12 +241,7 @@ const uploadAvatarFile = async () => {
         avatarPreviewUrl.value = '';
       }
       selectedAvatarFile.value = null;
-
-      // 切换回预定义头像标签页，这样用户可以看到自己上传的头像
-      activeTab.value = 'predefined';
-
-      // 重新加载可用头像列表，以包含新上传的头像
-      await fetchAvatarIds();
+      await saveProfile();
     } else {
       error.value = '头像上传失败，请重试';
     }
@@ -290,7 +254,7 @@ const uploadAvatarFile = async () => {
 };
 
 // 获取当前用户ID
-const userId = computed(() => state.user?.userId || 0);
+const userId = computed(() => state.user?.id || 0);
 
 // 加载用户信息
 const loadUserInfo = async () => {

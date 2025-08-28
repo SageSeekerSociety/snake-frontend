@@ -31,8 +31,8 @@ export const avatarService = {
    * 获取默认头像ID
    */
   getDefaultAvatarId: async () => {
-    const response = await apiClient.get("/avatars/default/id");
-    return response.data;
+    // const avatars = avatarService.getAvailableAvatarIds("predefined");
+    return 1;
   },
 
   /**

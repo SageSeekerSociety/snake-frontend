@@ -1,4 +1,4 @@
-import { User } from "./User";
+import { Player } from "./User";
 import { Position } from "./Position";
 import { FoodType } from "../config/GameConfig";
 import { EntityType } from "./EntityType";
@@ -117,7 +117,7 @@ export interface GameRecording {
   id: string;
   timestamp: number;
   name: string;
-  players: User[];
+  players: Player[];
   frames: GameRecordingFrame[];
   totalTicks: number;
   finalScores: {

@@ -3,7 +3,7 @@ import { TreasureChest } from "../entities/TreasureChest";
 import { Key } from "../entities/Key";
 import { Position } from "../types/Position";
 import { GameConfig } from "../config/GameConfig";
-import { User } from "../types/User";
+import { Player } from "../types/User";
 import { GameState } from "../types/GameState";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { CanvasManager } from "./CanvasManager";
@@ -42,7 +42,7 @@ export class GameManager {
 
   private gameInitialized: boolean = false;
   private gameRunning: boolean = false; // Use gameClock.isRunning maybe?
-  private selectedUsers: User[]; // Store selected users for game setup
+  private selectedUsers: Player[]; // Store selected users for game setup
   private animationId: number = 0; // For rendering loop
   private gameSessionId: string = uuidv4();
 
@@ -52,7 +52,7 @@ export class GameManager {
 
   constructor(
     canvas: HTMLCanvasElement,
-    selectedUsers: User[] = [], // Pass selected users during construction
+    selectedUsers: Player[] = [], // Pass selected users during construction
     options: { enableRecording?: boolean } = {}
   ) {
     this.selectedUsers = selectedUsers;
