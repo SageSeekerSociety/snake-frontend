@@ -50,8 +50,8 @@ export class GameRecordingService {
    * Start recording a new game session
    */
   startRecording(
-    players: Player[], 
-    totalTicks: number, 
+    players: Player[],
+    totalTicks: number,
     initialGameState?: GameState,
   ): void {
     if (this.isRecording) {
@@ -117,7 +117,7 @@ export class GameRecordingService {
    * Record a single frame (tick) of the game
    */
   recordFrame(
-    tick: number, 
+    tick: number,
     gameState: GameState,
   ): void {
     if (!this.isRecording || !this.recording) {
@@ -322,12 +322,14 @@ export class GameRecordingService {
     return frames.map(frame => ({
       tick: frame.tick,
       gameState: {
-        snakes: frame.gameState.snakes,
-        foodItems: frame.gameState.foodItems,
-        obstacles: frame.gameState.obstacles,
+        entities: {
+          snakes: frame.gameState.entities.snakes,
+          foodItems: frame.gameState.entities.foodItems,
+          obstacles: frame.gameState.entities.obstacles,
+          ...(frame.gameState.entities.treasureChests && { treasureChests: frame.gameState.entities.treasureChests }),
+          ...(frame.gameState.entities.keys && { keys: frame.gameState.entities.keys }),
+        },
         vortexField: frame.gameState.vortexField,
-        ...(frame.gameState.treasureChests && { treasureChests: frame.gameState.treasureChests }),
-        ...(frame.gameState.keys && { keys: frame.gameState.keys }),
         ...(frame.gameState.safeZone && { safeZone: frame.gameState.safeZone })
       }
     }));

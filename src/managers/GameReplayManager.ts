@@ -57,7 +57,7 @@ export class GameReplayManager {
       // 更新UI
       eventBus.emit(GameEventType.UI_UPDATE_TIMER, recording.totalTicks);
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(initialFrame.gameState.snakes));
+        this.deserializeSnakes(initialFrame.gameState.entities.snakes));
 
       // 添加初始状态通知
       this.sendReplayNotification("显示游戏初始状态", true);
@@ -144,7 +144,7 @@ export class GameReplayManager {
       // Update UI
       eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.recording.totalTicks);
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(this.recording.frames[0].gameState.snakes));
+        this.deserializeSnakes(this.recording.frames[0].gameState.entities.snakes));
     }
 
     console.log("Stopped playback");
@@ -169,7 +169,7 @@ export class GameReplayManager {
     // 获取当前帧的蛇状态（如果不是初始状态）
     let previousSnakes: any[] = [];
     if (this.currentFrameIndex >= 0 && this.currentFrameIndex < this.recording.frames.length) {
-      previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.snakes;
+      previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.entities.snakes;
     }
 
     // 确保帧索引在有效范围内
@@ -186,9 +186,9 @@ export class GameReplayManager {
       // 如果是向前跳转，重新生成从开始到当前帧的所有重要通知
       if (index > 0 && index > this.currentFrameIndex) {
         // 获取第一帧的蛇状态
-        const firstFrameSnakes = this.recording.frames[0].gameState.snakes;
+        const firstFrameSnakes = this.recording.frames[0].gameState.entities.snakes;
         // 获取目标帧的蛇状态
-        const targetFrameSnakes = this.recording.frames[index].gameState.snakes;
+        const targetFrameSnakes = this.recording.frames[index].gameState.entities.snakes;
 
         // 检测从第一帧到目标帧的蛇状态变化
         this.detectSnakeStateChanges(firstFrameSnakes, targetFrameSnakes);
@@ -196,7 +196,7 @@ export class GameReplayManager {
     } else if (index > this.currentFrameIndex && previousSnakes.length > 0) {
       // 如果是小幅度向前跳转，只检测相邻帧之间的变化
       const frame = this.recording.frames[index];
-      this.detectSnakeStateChanges(previousSnakes, frame.gameState.snakes);
+      this.detectSnakeStateChanges(previousSnakes, frame.gameState.entities.snakes);
     }
 
     this.currentFrameIndex = index;
@@ -211,7 +211,7 @@ export class GameReplayManager {
     const remainingTicks = this.recording.totalTicks - frame.tick;
     eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
     eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-      this.deserializeSnakes(frame.gameState.snakes));
+      this.deserializeSnakes(frame.gameState.entities.snakes));
 
     console.log(`Jumped to frame ${index}`);
   }
@@ -227,7 +227,7 @@ export class GameReplayManager {
       // 获取当前帧的蛇状态
       let previousSnakes: any[] = [];
       if (this.currentFrameIndex >= 0 && this.currentFrameIndex < this.recording.frames.length) {
-        previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.snakes;
+        previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.entities.snakes;
       }
 
       // 更新当前帧索引
@@ -241,7 +241,7 @@ export class GameReplayManager {
         this.sendReplayNotification("游戏开始", true);
       } else if (this.currentFrameIndex > 0) {
         // 只有在不是从初始状态到第一帧的情况下才检测状态变化
-        this.detectSnakeStateChanges(previousSnakes, frame.gameState.snakes);
+        this.detectSnakeStateChanges(previousSnakes, frame.gameState.entities.snakes);
       }
 
       // 渲染帧并更新UI
@@ -249,7 +249,7 @@ export class GameReplayManager {
       const remainingTicks = this.recording.totalTicks - frame.tick;
       eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(frame.gameState.snakes));
+        this.deserializeSnakes(frame.gameState.entities.snakes));
 
       // 添加帧变化通知（系统通知）
       this.sendReplayNotification(`当前帧: ${nextIndex + 1}/${this.recording.frames.length}`, true);
@@ -276,7 +276,7 @@ export class GameReplayManager {
       const remainingTicks = this.recording.totalTicks - frame.tick;
       eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(frame.gameState.snakes));
+        this.deserializeSnakes(frame.gameState.entities.snakes));
 
       // 添加帧变化通知（系统通知）
       this.sendReplayNotification(`当前帧: ${prevIndex + 1}/${this.recording.frames.length}`, true);
@@ -305,7 +305,7 @@ export class GameReplayManager {
 
       // 获取当前帧的蛇状态
       if (this.currentFrameIndex >= 0 && this.currentFrameIndex < this.recording.frames.length) {
-        previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.snakes;
+        previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.entities.snakes;
       }
 
       // 前进到下一帧
@@ -325,7 +325,7 @@ export class GameReplayManager {
 
       // 只有在不是从初始状态到第一帧的情况下才检测状态变化
       if (this.currentFrameIndex > 0) {
-        this.detectSnakeStateChanges(previousSnakes, frame.gameState.snakes);
+        this.detectSnakeStateChanges(previousSnakes, frame.gameState.entities.snakes);
       }
 
       // 渲染当前帧
@@ -335,7 +335,7 @@ export class GameReplayManager {
       const remainingTicks = this.recording.totalTicks - frame.tick;
       eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(frame.gameState.snakes));
+        this.deserializeSnakes(frame.gameState.entities.snakes));
     }
 
     // 请求下一帧动画
@@ -431,16 +431,16 @@ export class GameReplayManager {
   private renderFrame(frame: GameRecordingFrame): void {
     console.log(`Rendering frame ${this.currentFrameIndex} at tick ${frame.tick}`, frame);
     // Deserialize entities from the frame
-    const snakes = this.deserializeSnakes(frame.gameState.snakes);
-    const foodItems = this.deserializeFoodItems(frame.gameState.foodItems);
-    const obstacles = this.deserializeObstacles(frame.gameState.obstacles);
+    const snakes = this.deserializeSnakes(frame.gameState.entities.snakes);
+    const foodItems = this.deserializeFoodItems(frame.gameState.entities.foodItems);
+    const obstacles = this.deserializeObstacles(frame.gameState.entities.obstacles);
     
     // Deserialize treasure chests and keys if available
-    const treasureChests = frame.gameState.treasureChests 
-      ? this.deserializeTreasureChests(frame.gameState.treasureChests) 
+    const treasureChests = frame.gameState.entities.treasureChests 
+      ? this.deserializeTreasureChests(frame.gameState.entities.treasureChests) 
       : [];
-    const keys = frame.gameState.keys 
-      ? this.deserializeKeys(frame.gameState.keys) 
+    const keys = frame.gameState.entities.keys 
+      ? this.deserializeKeys(frame.gameState.entities.keys) 
       : [];
 
     // Get vortex field data for rendering (stored for future use)

@@ -93,12 +93,14 @@ export interface SerializedSafeZone {
 
 // 录制帧中的游戏状态（序列化后的数据）
 export interface RecordingGameState {
-  foodItems: SerializedFood[];
-  obstacles: SerializedObstacle[];
-  snakes: SerializedSnake[];
+  entities: {
+    foodItems: SerializedFood[];
+    obstacles: SerializedObstacle[];
+    snakes: SerializedSnake[];
+    treasureChests?: SerializedTreasureChest[];
+    keys?: SerializedKey[];
+  };
   vortexField: VortexFieldApiData;
-  treasureChests?: SerializedTreasureChest[];
-  keys?: SerializedKey[];
   safeZone?: SerializedSafeZone;
 }
 
