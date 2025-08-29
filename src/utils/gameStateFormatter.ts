@@ -7,7 +7,7 @@ import { Direction } from "../config/GameConfig";
 /**
  * Convert game state to algorithm program input format (same as sandboxService formatGameStateForAPI)
  */
-export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexData?: VortexFieldApiData): string {
+export function formatGameStateForAlgorithm(frame: GameRecordingFrame, currentUserId?: string): string {
   if (!frame || !frame.gameState) {
     return "无法获取游戏状态";
   }
@@ -76,7 +76,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
   });
 
   // Add vortex field information (use recorded data or provided override)
-  // const vortexFieldToUse = vortexData || frame.gameState.vortexField;
+  // const vortexFieldToUse = frame.gameState.vortexField;
   // if (vortexFieldToUse) {
   //   input += `${vortexFieldToUse.stateCode} ${vortexFieldToUse.param1} ${vortexFieldToUse.param2} ${vortexFieldToUse.param3} ${vortexFieldToUse.param4} ${vortexFieldToUse.param5}\n`;
   // } else {
@@ -162,6 +162,25 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
     input += `-1 0 0 39 29\n`; // 无最终目标
   }
 
+  // 如果提供了当前用户ID，查找该用户的蛇并附加memory数据
+  if (currentUserId) {
+    const currentUserSnake = snakes.find((snake: SerializedSnake) => {
+      const snakeStudentId = snake.metadata?.studentId || '';
+      const snakeUsername = snake.metadata?.username || '';
+      
+      return snakeStudentId === currentUserId ||
+             snakeUsername === currentUserId;
+    });
+
+    if (currentUserSnake && currentUserSnake.metadata?.newMemoryData) {
+      input += currentUserSnake.metadata.newMemoryData;
+      
+      if (!currentUserSnake.metadata.newMemoryData.endsWith('\n')) {
+        input += '\n';
+      }
+    }
+  }
+
   return input;
 }
 
@@ -185,9 +204,9 @@ const getDirectionValue = (direction: Direction | number): number => {
 /**
  * Copy game state to clipboard
  */
-export async function copyGameStateToClipboard(frame: GameRecordingFrame): Promise<boolean> {
+export async function copyGameStateToClipboard(frame: GameRecordingFrame, currentUserId?: string): Promise<boolean> {
   try {
-    const formattedState = formatGameStateForAlgorithm(frame);
+    const formattedState = formatGameStateForAlgorithm(frame, currentUserId);
     await navigator.clipboard.writeText(formattedState);
     return true;
   } catch (error) {

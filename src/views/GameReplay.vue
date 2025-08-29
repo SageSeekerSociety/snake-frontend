@@ -37,10 +37,12 @@
             <button @click="stop" class="pixel-button control-button">
               停止
             </button>
-            <button @click="copyCurrentFrameState" class="pixel-button control-button copy-button" title="复制当前帧状态作为算法输入">
+            <button @click="copyCurrentFrameState" class="pixel-button control-button copy-button"
+              title="复制当前帧状态作为算法输入">
               复制状态
             </button>
-            <button v-if="currentUserSnakeExists" @click="toggleDebugInfo" class="pixel-button control-button debug-button" title="显示当前用户蛇的调试信息">
+            <button v-if="currentUserSnakeExists" @click="toggleDebugInfo"
+              class="pixel-button control-button debug-button" title="显示当前用户蛇的调试信息">
               调试信息
             </button>
           </div>
@@ -57,14 +59,8 @@
           </div>
 
           <div class="replay-timeline">
-            <input
-              type="range"
-              min="0"
-              :max="totalFrames - 1"
-              v-model="currentFrame"
-              @input="seekToFrame"
-              class="timeline-slider"
-            />
+            <input type="range" min="0" :max="totalFrames - 1" v-model="currentFrame" @input="seekToFrame"
+              class="timeline-slider" />
           </div>
 
           <button @click="returnToList" class="pixel-button return-button">
@@ -76,13 +72,9 @@
       <GameUIRight class="game-ui-right" />
 
       <!-- Debug Info Panel for Current User's Snake -->
-      <div v-if="showDebugInfo" 
-           ref="debugPanel"
-           class="debug-panel pixel-border"
-           :style="{ left: debugPanelPosition.x + 'px', top: debugPanelPosition.y + 'px' }">
-        <div class="debug-header draggable-header"
-             @mousedown="startDrag"
-             @touchstart="startDrag">
+      <div v-if="showDebugInfo" ref="debugPanel" class="debug-panel pixel-border"
+        :style="{ left: debugPanelPosition.x + 'px', top: debugPanelPosition.y + 'px' }">
+        <div class="debug-header draggable-header" @mousedown="startDrag" @touchstart="startDrag">
           <span class="debug-title">{{ currentUserSnakeName }} 调试信息</span>
           <button @click="showDebugInfo = false" class="close-button">×</button>
         </div>
@@ -102,11 +94,7 @@
       </div>
 
       <!-- Game Rankings Modal -->
-      <GameRankings
-        :show="showFinalRankings"
-        :scores="finalScores"
-        @close="closeFinalRankings"
-      />
+      <GameRankings :show="showFinalRankings" :scores="finalScores" @close="closeFinalRankings" />
     </div>
   </div>
 </template>
@@ -166,7 +154,7 @@ const loadRecording = async (recordingId: string) => {
       replayManager.value.loadRecording(recording);
       totalFrames.value = recording.frames.length;
       currentFrame.value = 0;
-      
+
       // 初始化当前用户蛇的调试信息
       updateCurrentUserSnakeDebug();
 
@@ -260,10 +248,26 @@ const copyCurrentFrameState = async () => {
   }
 
   try {
-    const success = await copyGameStateToClipboard(currentFrame);
+    // 获取当前用户ID以便附加memory数据
+    const currentUserId = authState.user?.username;
+    const success = await copyGameStateToClipboard(currentFrame, currentUserId);
     if (success) {
-      // 发送通知而不是弹出警告框
-      eventBus.emit(GameEventType.UI_NOTIFICATION, `已复制第 ${currentFrame.tick} 帧状态到剪贴板`);
+      // 检查是否包含了memory数据
+      const hasMemoryData = currentUserId && currentFrame.gameState.entities.snakes.some((snake: any) => {
+        const snakeStudentId = snake.metadata?.studentId || '';
+        const snakeUsername = snake.metadata?.username || '';
+
+        return (snakeStudentId === currentUserId ||
+          snakeUsername === currentUserId) &&
+          snake.metadata?.newMemoryData;
+      });
+
+      let message = `已复制第 ${currentFrame.tick} 帧状态到剪贴板`;
+      if (hasMemoryData) {
+        message += "（包含Memory数据）";
+      }
+
+      eventBus.emit(GameEventType.UI_NOTIFICATION, message);
     } else {
       eventBus.emit(GameEventType.UI_NOTIFICATION, "复制失败，请手动复制");
     }
@@ -288,7 +292,7 @@ const closeFinalRankings = () => {
 // 切换调试信息面板
 const toggleDebugInfo = () => {
   showDebugInfo.value = !showDebugInfo.value;
-  
+
   // 如果是首次打开，设置默认位置为右上角
   if (showDebugInfo.value && debugPanelPosition.value.x === 20 && debugPanelPosition.value.y === 20) {
     const viewportWidth = window.innerWidth;
@@ -320,18 +324,18 @@ const updateCurrentUserSnakeDebug = () => {
     const snakeStudentId = snake.metadata?.studentId || '';
     const snakeUsername = snake.metadata?.username || '';
     const snakeName = snake.metadata?.name || '';
-    
+
     // 匹配逻辑：studentId、username或name包含用户标识
     return snakeStudentId === currentUserId ||
-           snakeStudentId === currentUserUsername ||
-           snakeUsername === currentUserUsername ||
-           snakeName.includes(currentUserUsername);
+      snakeStudentId === currentUserUsername ||
+      snakeUsername === currentUserUsername ||
+      snakeName.includes(currentUserUsername);
   });
 
   if (userSnake) {
     currentUserSnakeExists.value = true;
     currentUserSnakeName.value = userSnake.metadata?.name || currentUserUsername;
-    
+
     // 提取调试信息
     const metadata = userSnake.metadata || {};
     currentUserSnakeDebug.value = {
@@ -349,15 +353,15 @@ const updateCurrentUserSnakeDebug = () => {
 const startDrag = (event: MouseEvent | TouchEvent) => {
   event.preventDefault();
   isDragging.value = true;
-  
+
   const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
   const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-  
+
   dragOffset.value = {
     x: clientX - debugPanelPosition.value.x,
     y: clientY - debugPanelPosition.value.y
   };
-  
+
   // 添加全局监听器
   document.addEventListener('mousemove', onDrag);
   document.addEventListener('mouseup', stopDrag);
@@ -367,31 +371,31 @@ const startDrag = (event: MouseEvent | TouchEvent) => {
 
 const onDrag = (event: MouseEvent | TouchEvent) => {
   if (!isDragging.value) return;
-  
+
   event.preventDefault();
-  
+
   const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
   const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
-  
+
   let newX = clientX - dragOffset.value.x;
   let newY = clientY - dragOffset.value.y;
-  
+
   // 获取视窗尺寸和面板尺寸进行边界限制
   const panelWidth = 350; // 面板宽度
   const panelHeight = debugPanel.value?.offsetHeight || 400;
   const viewportWidth = window.innerWidth;
   const viewportHeight = window.innerHeight;
-  
+
   // 限制在视窗内
   newX = Math.max(0, Math.min(newX, viewportWidth - panelWidth));
   newY = Math.max(0, Math.min(newY, viewportHeight - panelHeight));
-  
+
   debugPanelPosition.value = { x: newX, y: newY };
 };
 
 const stopDrag = () => {
   isDragging.value = false;
-  
+
   // 移除全局监听器
   document.removeEventListener('mousemove', onDrag);
   document.removeEventListener('mouseup', stopDrag);
@@ -505,8 +509,10 @@ onMounted(() => {
   height: 100%;
   justify-content: flex-start;
   gap: 15px;
-  width: calc(100% - 560px); /* 减去左右两侧面板的宽度 */
-  min-width: 500px; /* 确保最小宽度 */
+  width: calc(100% - 560px);
+  /* 减去左右两侧面板的宽度 */
+  min-width: 500px;
+  /* 确保最小宽度 */
 }
 
 .game-canvas-container {
@@ -516,7 +522,8 @@ onMounted(() => {
   background-color: rgba(20, 20, 40, 0.8);
   padding: 10px;
   flex-grow: 1;
-  min-height: 500px; /* 确保最小高度 */
+  min-height: 500px;
+  /* 确保最小高度 */
   position: relative;
   overflow: hidden;
 }
@@ -544,7 +551,8 @@ onMounted(() => {
   gap: 6px;
   border-radius: 8px;
   margin-top: 0;
-  max-height: 180px; /* 限制控制面板的最大高度 */
+  max-height: 180px;
+  /* 限制控制面板的最大高度 */
 }
 
 .replay-info {
