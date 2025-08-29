@@ -2,7 +2,7 @@ import { GameConfig, GamePhase } from "../config/GameConfig";
 import { Position } from "../types/Position";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { SerializedSafeZone } from "../types/GameRecording";
-import { SafeZoneBounds } from "../types/GameState";
+import { SafeZoneAlgorithmInfo, SafeZoneBounds } from "../types/GameState";
 
 /**
  * Safe zone shrink event information for AI
@@ -10,15 +10,6 @@ import { SafeZoneBounds } from "../types/GameState";
 export interface SafeZoneShrinkEventInfo {
   startTick: number;
   targetBounds: SafeZoneBounds;
-}
-
-/**
- * Complete safe zone information for AI algorithms
- */
-export interface SafeZoneAlgorithmInfo {
-  currentBounds: SafeZoneBounds;
-  nextShrinkEvent?: SafeZoneShrinkEventInfo;
-  finalShrinkEvent?: SafeZoneShrinkEventInfo;
 }
 
 /**

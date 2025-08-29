@@ -64,10 +64,11 @@ export class Snake extends Entity {
     color: string,
     direction: Direction,
     decisionStrategy: SnakeDecisionStrategy,
-    metadata: SnakeMetadata = {}
+    metadata: SnakeMetadata = {},
+    id?: number,
   ) {
     super(position, size);
-    this.id = Snake.nextId++;
+    this.id = id ? id : (Snake.nextId++);
     this.body = this.initializeBody(position, direction);
     this.lastBody = [...this.body];
     this.direction = direction;
@@ -549,6 +550,7 @@ export class Snake extends Entity {
    */
   serialize(): any {
     return {
+      id: this.id,
       position: this.getPosition(),
       size: this.size,
       // Store actual positions, not interpolated ones

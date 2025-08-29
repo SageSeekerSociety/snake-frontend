@@ -485,7 +485,8 @@ export class GameReplayManager {
         data.color,
         data.direction as Direction,
         dummyStrategy,
-        data.metadata || {}
+        data.metadata || {},
+        data.id
       );
 
       // Set additional properties

@@ -1,4 +1,4 @@
-import { GameRecording, GameRecordingFrame } from "../types/GameRecording";
+import { GameRecording, GameRecordingFrame, SerializedSafeZone } from "../types/GameRecording";
 import { GameState } from "../types/GameState";
 import { Player } from "../types/User";
 
@@ -119,6 +119,7 @@ export class GameRecordingService {
   recordFrame(
     tick: number,
     gameState: GameState,
+    safeZone?: SerializedSafeZone
   ): void {
     if (!this.isRecording || !this.recording) {
       console.warn("Not currently recording");
@@ -127,7 +128,7 @@ export class GameRecordingService {
 
     try {
       // Create a deep copy of the game state to avoid reference issues
-      const stateCopy: any = {
+      const stateCopy = {
         entities: {
           snakes: gameState.entities.snakes.map(snake => this.sanitizeObject(snake.serialize())),
           foodItems: gameState.entities.foodItems.map(food => this.sanitizeObject(food.serialize())),
@@ -136,7 +137,7 @@ export class GameRecordingService {
           keys: gameState.entities.keys?.map(key => this.sanitizeObject(key.serialize())) || []
         },
         vortexField: this.sanitizeObject(gameState.vortexField),
-        safeZone: gameState.safeZone ? this.sanitizeObject(gameState.safeZone) : undefined
+        safeZone,
       };
 
       const frame: GameRecordingFrame = {

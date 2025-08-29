@@ -6,6 +6,7 @@ import { VortexFieldApiData } from "./VortexField";
 
 // 序列化后的蛇数据结构（对应Snake.serialize()的返回值）
 export interface SerializedSnake {
+  id: number;
   position: Position;
   size: number;
   body: Position[];

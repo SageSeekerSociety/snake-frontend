@@ -358,6 +358,7 @@ export class GameManager {
       gameRecordingService.recordFrame(
         tick, 
         gameState,
+        this.safeZoneManager.serialize(this.gameClock.getCurrentTick())
       );
     } catch (error) {
       console.error("Failed to record game frame:", error);
