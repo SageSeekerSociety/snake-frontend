@@ -40,6 +40,9 @@
             <button @click="copyCurrentFrameState" class="pixel-button control-button copy-button" title="复制当前帧状态作为算法输入">
               复制状态
             </button>
+            <button v-if="currentUserSnakeExists" @click="toggleDebugInfo" class="pixel-button control-button debug-button" title="显示当前用户蛇的调试信息">
+              调试信息
+            </button>
           </div>
 
           <div class="replay-speed">
@@ -72,6 +75,32 @@
 
       <GameUIRight class="game-ui-right" />
 
+      <!-- Debug Info Panel for Current User's Snake -->
+      <div v-if="showDebugInfo" 
+           ref="debugPanel"
+           class="debug-panel pixel-border"
+           :style="{ left: debugPanelPosition.x + 'px', top: debugPanelPosition.y + 'px' }">
+        <div class="debug-header draggable-header"
+             @mousedown="startDrag"
+             @touchstart="startDrag">
+          <span class="debug-title">{{ currentUserSnakeName }} 调试信息</span>
+          <button @click="showDebugInfo = false" class="close-button">×</button>
+        </div>
+        <div class="debug-content">
+          <div v-if="currentUserSnakeDebug.stderr" class="debug-section">
+            <h4>stderr 输出:</h4>
+            <pre class="debug-text">{{ currentUserSnakeDebug.stderr }}</pre>
+          </div>
+          <div v-if="currentUserSnakeDebug.newMemoryData" class="debug-section">
+            <h4>Memory Data:</h4>
+            <pre class="debug-text">{{ currentUserSnakeDebug.newMemoryData }}</pre>
+          </div>
+          <div v-if="!currentUserSnakeDebug.stderr && !currentUserSnakeDebug.newMemoryData" class="debug-section">
+            <p class="no-debug-data">当前帧无调试数据</p>
+          </div>
+        </div>
+      </div>
+
       <!-- Game Rankings Modal -->
       <GameRankings
         :show="showFinalRankings"
@@ -93,10 +122,12 @@ import { gameRecordingService } from "../services/gameRecordingService";
 import { GameRecording } from "../types/GameRecording";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { copyGameStateToClipboard } from "../utils/gameStateFormatter";
+import { useAuth } from "../stores/auth";
 
 const router = useRouter();
 const replayCanvas = ref<HTMLCanvasElement | null>(null);
 const replayManager = ref<GameReplayManager | null>(null);
+const { state: authState } = useAuth();
 
 // 回放状态
 const currentRecording = ref<GameRecording | null>(null);
@@ -111,6 +142,18 @@ const playbackSpeed = ref("1");
 const showFinalRankings = ref<boolean>(false);
 const finalScores = ref<any[]>([]);
 
+// 调试信息相关状态
+const showDebugInfo = ref<boolean>(false);
+const currentUserSnakeExists = ref<boolean>(false);
+const currentUserSnakeName = ref<string>("");
+const currentUserSnakeDebug = ref<{ stderr?: string; newMemoryData?: string }>({});
+const debugPanel = ref<HTMLElement | null>(null);
+
+// 拖拽相关状态
+const debugPanelPosition = ref<{ x: number; y: number }>({ x: 20, y: 20 });
+const isDragging = ref<boolean>(false);
+const dragOffset = ref<{ x: number; y: number }>({ x: 0, y: 0 });
+
 // 加载录制
 const loadRecording = async (recordingId: string) => {
   isLoading.value = true;
@@ -123,6 +166,9 @@ const loadRecording = async (recordingId: string) => {
       replayManager.value.loadRecording(recording);
       totalFrames.value = recording.frames.length;
       currentFrame.value = 0;
+      
+      // 初始化当前用户蛇的调试信息
+      updateCurrentUserSnakeDebug();
 
       console.log(`Loaded recording: ${recording.name}`);
     } else {
@@ -173,6 +219,7 @@ const nextFrame = () => {
   if (replayManager.value) {
     replayManager.value.nextFrame();
     currentFrame.value = replayManager.value.getCurrentFrameIndex();
+    updateCurrentUserSnakeDebug();
   }
 };
 
@@ -180,12 +227,14 @@ const previousFrame = () => {
   if (replayManager.value) {
     replayManager.value.previousFrame();
     currentFrame.value = replayManager.value.getCurrentFrameIndex();
+    updateCurrentUserSnakeDebug();
   }
 };
 
 const seekToFrame = () => {
   if (replayManager.value) {
     replayManager.value.jumpToFrame(currentFrame.value);
+    updateCurrentUserSnakeDebug();
   }
 };
 
@@ -236,12 +285,127 @@ const closeFinalRankings = () => {
   showFinalRankings.value = false;
 };
 
+// 切换调试信息面板
+const toggleDebugInfo = () => {
+  showDebugInfo.value = !showDebugInfo.value;
+  
+  // 如果是首次打开，设置默认位置为右上角
+  if (showDebugInfo.value && debugPanelPosition.value.x === 20 && debugPanelPosition.value.y === 20) {
+    const viewportWidth = window.innerWidth;
+    debugPanelPosition.value = {
+      x: viewportWidth - 370, // 面板宽度350 + 20px边距
+      y: 20
+    };
+  }
+};
+
+// 更新当前用户蛇的调试信息
+const updateCurrentUserSnakeDebug = () => {
+  if (!replayManager.value || !authState.user) {
+    currentUserSnakeExists.value = false;
+    return;
+  }
+
+  const currentFrame = replayManager.value.getCurrentFrame();
+  if (!currentFrame) {
+    currentUserSnakeDebug.value = {};
+    return;
+  }
+
+  const currentUserId = authState.user.id?.toString() || authState.user.username;
+  const currentUserUsername = authState.user.username;
+
+  // 查找当前用户的蛇
+  const userSnake = currentFrame.gameState.entities.snakes.find((snake: any) => {
+    const snakeStudentId = snake.metadata?.studentId || '';
+    const snakeUsername = snake.metadata?.username || '';
+    const snakeName = snake.metadata?.name || '';
+    
+    // 匹配逻辑：studentId、username或name包含用户标识
+    return snakeStudentId === currentUserId ||
+           snakeStudentId === currentUserUsername ||
+           snakeUsername === currentUserUsername ||
+           snakeName.includes(currentUserUsername);
+  });
+
+  if (userSnake) {
+    currentUserSnakeExists.value = true;
+    currentUserSnakeName.value = userSnake.metadata?.name || currentUserUsername;
+    
+    // 提取调试信息
+    const metadata = userSnake.metadata || {};
+    currentUserSnakeDebug.value = {
+      stderr: metadata.stderr || undefined,
+      newMemoryData: metadata.newMemoryData || undefined
+    };
+  } else {
+    currentUserSnakeExists.value = false;
+    currentUserSnakeName.value = "";
+    currentUserSnakeDebug.value = {};
+  }
+};
+
+// 拖拽相关方法
+const startDrag = (event: MouseEvent | TouchEvent) => {
+  event.preventDefault();
+  isDragging.value = true;
+  
+  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+  
+  dragOffset.value = {
+    x: clientX - debugPanelPosition.value.x,
+    y: clientY - debugPanelPosition.value.y
+  };
+  
+  // 添加全局监听器
+  document.addEventListener('mousemove', onDrag);
+  document.addEventListener('mouseup', stopDrag);
+  document.addEventListener('touchmove', onDrag);
+  document.addEventListener('touchend', stopDrag);
+};
+
+const onDrag = (event: MouseEvent | TouchEvent) => {
+  if (!isDragging.value) return;
+  
+  event.preventDefault();
+  
+  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
+  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+  
+  let newX = clientX - dragOffset.value.x;
+  let newY = clientY - dragOffset.value.y;
+  
+  // 获取视窗尺寸和面板尺寸进行边界限制
+  const panelWidth = 350; // 面板宽度
+  const panelHeight = debugPanel.value?.offsetHeight || 400;
+  const viewportWidth = window.innerWidth;
+  const viewportHeight = window.innerHeight;
+  
+  // 限制在视窗内
+  newX = Math.max(0, Math.min(newX, viewportWidth - panelWidth));
+  newY = Math.max(0, Math.min(newY, viewportHeight - panelHeight));
+  
+  debugPanelPosition.value = { x: newX, y: newY };
+};
+
+const stopDrag = () => {
+  isDragging.value = false;
+  
+  // 移除全局监听器
+  document.removeEventListener('mousemove', onDrag);
+  document.removeEventListener('mouseup', stopDrag);
+  document.removeEventListener('touchmove', onDrag);
+  document.removeEventListener('touchend', stopDrag);
+};
+
 // 监听回放管理器状态变化
 const setupReplayManagerWatcher = () => {
   // 每秒更新当前帧
   const updateInterval = setInterval(() => {
     if (replayManager.value && isPlaying.value && !isPaused.value) {
       currentFrame.value = replayManager.value.getCurrentFrameIndex();
+      updateCurrentUserSnakeDebug();
     }
   }, 100);
 
@@ -273,6 +437,8 @@ watch(currentFrame, (newFrame) => {
   if (replayManager.value && !isPlaying.value) {
     replayManager.value.jumpToFrame(newFrame);
   }
+  // 每次帧变化时都更新调试信息
+  updateCurrentUserSnakeDebug();
 });
 
 onMounted(() => {
@@ -301,6 +467,8 @@ onMounted(() => {
     cleanupReplay();
     removeReplayManagerWatcher();
     removeEventListeners();
+    // 清理拖拽监听器
+    stopDrag();
   });
 });
 </script>
@@ -480,5 +648,110 @@ onMounted(() => {
   padding: 6px 12px;
   font-size: 10px;
   margin-top: 4px;
+}
+
+.debug-button {
+  background-color: #8b5a3c;
+}
+
+.debug-button:hover {
+  background-color: #9d6647;
+}
+
+.debug-panel {
+  position: fixed;
+  width: 350px;
+  max-height: 60vh;
+  background-color: rgba(0, 0, 0, 0.9);
+  border-radius: 8px;
+  overflow: hidden;
+  z-index: 1000;
+  box-shadow: 0 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.debug-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background-color: #8b5a3c;
+  color: white;
+}
+
+.draggable-header {
+  cursor: move;
+  cursor: grab;
+  user-select: none;
+}
+
+.draggable-header:active {
+  cursor: grabbing;
+}
+
+.debug-title {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  font-weight: bold;
+}
+
+.close-button {
+  background: none;
+  border: none;
+  color: white;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.close-button:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+  border-radius: 50%;
+}
+
+.debug-content {
+  padding: 15px;
+  max-height: calc(60vh - 60px);
+  overflow-y: auto;
+}
+
+.debug-section {
+  margin-bottom: 15px;
+}
+
+.debug-section h4 {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #4ade80;
+  margin-bottom: 8px;
+  margin-top: 0;
+}
+
+.debug-text {
+  font-family: 'Courier New', monospace;
+  font-size: 11px;
+  color: #e5e5e5;
+  background-color: rgba(20, 20, 40, 0.8);
+  padding: 10px;
+  border-radius: 4px;
+  border-left: 3px solid #8b5a3c;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.no-debug-data {
+  font-family: 'Press Start 2P', monospace;
+  font-size: 10px;
+  color: #aaa;
+  text-align: center;
+  padding: 20px;
+  margin: 0;
 }
 </style>

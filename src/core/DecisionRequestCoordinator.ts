@@ -6,10 +6,12 @@ import { sandboxService } from "../services/api";
 export interface DecisionData {
   success: boolean;
   output: string | null;
+  stderr: string | null;
   status: string; // SUCCESS, TLE, MLE, RE, ERROR etc.
   error?: string;
   cpuTimeSeconds?: number;
   memoryKb?: number;
+  newMemoryData?: string;
 }
 
 // Type for the function stored in the promise map
@@ -139,13 +141,16 @@ export class DecisionRequestCoordinator {
       isFinal = true;
       const result = eventData.data;
       const success = eventData.status === "SUCCESS";
+      console.debug("Coordinator: SSE event received:", eventData);
       const decisionData: DecisionData = {
         success,
         output: result?.programOutput ?? null,
+        stderr: result?.programStderr ?? null,
         status: eventData.status ?? "UNKNOWN",
         error: !success ? result?.errorDetails ?? eventData.message : undefined,
         cpuTimeSeconds: result?.cpuTimeSeconds,
         memoryKb: result?.memoryKb,
+        newMemoryData: result?.newMemoryData ? atob(result.newMemoryData) : undefined
       };
 
       resolver.resolve(decisionData);

@@ -204,7 +204,12 @@ export class APIDecisionStrategy implements SnakeDecisionStrategy {
 
       // 4. Process the received decision data
       console.debug(`Tick ${remainingTicks}: Received decision data for ${this.username} (ClientReqId: ${clientRequestId}):`, decisionData);
-
+      if (decisionData.stderr) {
+        snake.setMetadata({ stderr: decisionData.stderr });
+      }
+      if (decisionData.newMemoryData) {
+        snake.setMetadata({ newMemoryData: decisionData.newMemoryData });
+      }
       if (decisionData.success && decisionData.output) {
         const decisionValue = this.parseDecisionOutput(decisionData.output);
         this.applyDecision(snake, decisionValue); // Apply the valid decision
