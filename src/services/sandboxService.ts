@@ -65,73 +65,59 @@ export const sandboxService = {
   },
 
   /**
-   * Submits code and listens for compilation events using SSE.
-   * This function orchestrates the two-step process: submit then listen.
-   * @param file The source code file.
+   * Creates and returns an SSE connection to listen for compilation events.
+   * @param jobId The job ID to listen for.
    * @param onEvent Callback for each received SSE event.
-   * @param onError Callback for any connection or submission error.
-   * @param onProgress Optional callback to track upload progress.
-   * @returns A promise that resolves to the SSE instance for manual control (e.g., `close()`), or null if submission fails.
+   * @param onError Callback for connection-level errors.
+   * @returns The SSE instance for manual control.
    */
-  submitCodeWithSSE: async (
-    file: File,
+  listenToCompilationStream: (
+    jobId: string,
     onEvent: (eventData: SseEventData) => void,
-    onError: (error: any) => void,
-    onProgress?: (progressPercent: number) => void
-  ): Promise<SSE | null> => {
-    try {
-      // Step 1: Submit the code via a standard REST call.
-      const jobId = await sandboxService.submitCode(file, onProgress);
-      console.log(`Submission successful. Job ID: ${jobId}`);
+    onError: (error: any) => void
+  ): SSE => {
+    const token = localStorage.getItem("accessToken");
+    const sse = new SSE(
+      `${sandboxClient.defaults.baseURL}/compile/stream/${jobId}`,
+      {
+        headers: { Authorization: `Bearer ${token}` },
+      }
+    );
 
-      // Step 2: If submission is successful, connect to the SSE stream.
-      const token = localStorage.getItem("accessToken");
-      const sse = new SSE(
-        `${sandboxClient.defaults.baseURL}/compile/stream/${jobId}`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
-      );
+    // Unified event handler
+    const handleEvent = (event: MessageEvent) => {
+      try {
+        const parsedData: SseEventData = JSON.parse(event.data);
+        onEvent(parsedData);
+      } catch (err) {
+        console.error("Failed to parse SSE event data:", event.data, err);
+      }
+    };
 
-      // Unified event handler
-      const handleEvent = (event: MessageEvent) => {
+    sse.addEventListener("message", handleEvent);
+    sse.addEventListener("FINAL_RESULT", handleEvent);
+
+    // Handle connection-level errors (e.g., auth failure, job not found)
+    sse.addEventListener("error", (errorEvent: any) => {
+      console.error("SSE Connection Error:", errorEvent);
+      if (errorEvent.data) {
         try {
-          const parsedData: SseEventData = JSON.parse(event.data);
-          onEvent(parsedData);
-        } catch (err) {
-          console.error("Failed to parse SSE event data:", event.data, err);
+          // Server sent a structured JSON error
+          onError(JSON.parse(errorEvent.data));
+        } catch {
+          // Fallback for non-JSON error data
+          onError({ message: "An unknown SSE error occurred." });
         }
-      };
+      } else {
+        onError({
+          message: `Connection failed with status ${errorEvent.responseCode}.`,
+        });
+      }
+      sse.close();
+    });
 
-      sse.addEventListener("message", handleEvent);
-      sse.addEventListener("FINAL_RESULT", handleEvent);
-
-      // Handle connection-level errors (e.g., auth failure, job not found)
-      sse.addEventListener("error", (errorEvent: any) => {
-        console.error("SSE Connection Error:", errorEvent);
-        if (errorEvent.data) {
-          try {
-            // Server sent a structured JSON error
-            onError(JSON.parse(errorEvent.data));
-          } catch {
-            // Fallback for non-JSON error data
-            onError({ message: "An unknown SSE error occurred." });
-          }
-        } else {
-          onError({
-            message: `Connection failed with status ${errorEvent.responseCode}.`,
-          });
-        }
-        sse.close();
-      });
-
-      sse.stream();
-      return sse;
-    } catch (error: any) {
-      console.error("Failed to submit or start SSE stream:", error);
-      onError(error.response?.data || { message: error.message });
-      return null;
-    }
+    sse.stream();
+    return sse;
   },
 
   /**
@@ -182,7 +168,7 @@ export const sandboxService = {
           console.error("Failed to parse SSE event data:", event.data, err);
         }
       };
-      
+
       // Listen to all relevant named events.
       sse.addEventListener("FINAL_RESULT", handleEvent);
       // Add other events like SUBMITTED if needed.
@@ -391,7 +377,7 @@ export const formatGameStateForAPI = (
   // 附加宝箱信息块
   const openTreasures = treasureChests.filter((treasure) => !treasure.isOpened());
   input += `${openTreasures.length}\n`;
-  
+
   // 添加每个未开启宝箱的位置和分数
   openTreasures.forEach((treasure) => {
     const pos = treasure.getPosition();
@@ -404,8 +390,8 @@ export const formatGameStateForAPI = (
   // 附加钥匙信息
   // 计算总钥匙数（地上的 + 蛇持有的）
   const groundKeys = keys;
-  const heldKeysData: Array<{x: number, y: number, studentId: string, remainingTime: number}> = [];
-  
+  const heldKeysData: Array<{ x: number, y: number, studentId: string, remainingTime: number }> = [];
+
   // 收集蛇持有的钥匙信息
   snakes.filter(snake => snake.isAlive()).forEach((snake) => {
     if (snake.hasKey()) {
@@ -414,14 +400,14 @@ export const formatGameStateForAPI = (
       const y = Math.floor(headPos.y / 20);
       const studentId = snake.getMetadata().username || snake.getMetadata().studentId || 'unknown';
       const remainingTime = 40 - snake.getKeyHoldTime(); // 剩余时间
-      
+
       heldKeysData.push({ x, y, studentId, remainingTime });
     }
   });
 
   const totalKeys = groundKeys.length + heldKeysData.length;
   input += `${totalKeys}\n`;
-  
+
   // 添加地上的钥匙（没有持有者）
   groundKeys.forEach((key) => {
     const pos = key.getPosition();
@@ -429,7 +415,7 @@ export const formatGameStateForAPI = (
     const y = Math.floor(pos.y / 20);
     input += `${y} ${x} -1 0\n`; // -1表示无持有者，0表示无持有时间
   });
-  
+
   // 添加蛇持有的钥匙
   heldKeysData.forEach((keyData) => {
     input += `${keyData.y} ${keyData.x} ${keyData.studentId} ${keyData.remainingTime}\n`;

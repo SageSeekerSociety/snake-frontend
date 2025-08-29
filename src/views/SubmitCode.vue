@@ -8,15 +8,10 @@
 
       <div class="submit-content">
         <div v-if="!isCompilingUI && !hasResult" class="upload-section">
-          <label
-            for="codeFile"
-            class="file-label pixel-border"
+          <label for="codeFile" class="file-label pixel-border"
             :class="{ 'has-file': !!selectedFile, dragging: isDragging, uploading: isUploading }"
-            :style="isUploading ? { '--upload-progress': uploadProgress + '%' } : {}"
-            @dragover.prevent="onDragOver"
-            @dragleave.prevent="onDragLeave"
-            @drop.prevent="onDrop"
-          >
+            :style="isUploading ? { '--upload-progress': uploadProgress + '%' } : {}" @dragover.prevent="onDragOver"
+            @dragleave.prevent="onDragLeave" @drop.prevent="onDrop">
             <div class="file-icon"></div>
             <div class="file-content">
               <template v-if="selectedFile">
@@ -32,39 +27,25 @@
               </template>
             </div>
             <div v-if="selectedFile" class="file-actions">
-              <button
-                class="pixel-link-button small"
-                type="button"
-                @click.stop.prevent="triggerChooseFile"
-              >更换文件</button>
-              <button
-                class="pixel-link-button danger small"
-                type="button"
-                @click.stop.prevent="clearFile"
-              >清除</button>
+              <button class="pixel-link-button small" type="button"
+                @click.stop.prevent="triggerChooseFile">更换文件</button>
+              <button class="pixel-link-button danger small" type="button" @click.stop.prevent="clearFile">清除</button>
             </div>
-            <input
-              type="file"
-              id="codeFile"
-              accept=".cpp"
-              @change="handleFileChange"
-              class="file-input"
-              ref="fileInputRef"
-            />
+            <input type="file" id="codeFile" accept=".cpp" @change="handleFileChange" class="file-input"
+              ref="fileInputRef" />
           </label>
 
           <div class="submit-actions">
-            <button
-              @click="handleSubmit"
-              class="pixel-button"
-              :disabled="isUploading || !selectedFile"
-            >
-              {{ isUploading ? '上传中...' : '提交代码' }}
+            <button @click="handleSubmit" class="pixel-button"
+              :disabled="isUploading || !selectedFile || rateLimitCountdown > 0">
+              {{ isUploading ? '上传中...' : rateLimitCountdown > 0 ? `等待${rateLimitCountdown}秒` : '提交代码' }}
             </button>
           </div>
 
-          <!-- 只显示文件上传相关的错误（如文件类型、大小错误） -->
-          <div v-if="error && !compilationStatus" class="error-message">{{ error }}</div>
+          <!-- 显示所有上传阶段的错误（文件类型、大小、429等） -->
+          <div v-if="error" :class="['error-message', { 'rate-limit-error': rateLimitCountdown > 0 }]">
+            {{ rateLimitCountdown > 0 ? `请求频率过高，请${rateLimitCountdown}秒后重试` : error }}
+          </div>
         </div>
 
         <!-- 编译/结果区域：在上传完成后或 SUBMITTED 后进入显示（统一使用状态条样式） -->
@@ -78,7 +59,7 @@
             </div>
             <div v-if="compilationTime && hasResult" class="compilation-time">{{ compilationTime }}</div>
           </div>
-          
+
           <!-- 编译输出 -->
           <div v-if="compilationOutput" class="console-output pixel-border">
             <div class="console-header">
@@ -125,6 +106,7 @@ import { ref, onUnmounted, computed, nextTick } from 'vue';
 import { sandboxService } from '../services/sandboxService';
 import { useAuth } from '../stores/auth';
 import { SSE } from 'sse.js';
+import { RateLimitError } from '../types/RateLimitError';
 
 const { state } = useAuth();
 
@@ -140,6 +122,8 @@ const compilationOutput = ref<string | null>(null);
 const compilationTime = ref<string | null>(null);
 const statusText = ref<string | null>(null);
 const jobId = ref<string | null>(null);
+const rateLimitCountdown = ref<number>(0);
+const rateLimitTimer = ref<number | null>(null);
 
 const statusBarClass = computed(() => {
   if (hasResult.value && compilationStatus.value) {
@@ -158,13 +142,12 @@ const statusIconClass = computed(() => {
 });
 const sseSource = ref<SSE | null>(null);
 
-// UI 阶段：便于模板控制展示
+// UI 阶段状态
 const isCompiling = computed(() => compilationStatus.value === 'compiling');
 const hasResult = computed(() => compilationStatus.value === 'success' || compilationStatus.value === 'error');
-// 上传完成标志，用于在 SSE 返回前展示编译中界面
-const uploadCompleted = ref(false);
-// 编译中界面显隐：上传完成后或实际进入编译状态
-const isCompilingUI = computed(() => isCompiling.value || (uploadCompleted.value && !hasResult.value));
+const hasJobId = computed(() => !!jobId.value);
+// 显示编译界面：有jobId但还没有最终结果
+const isCompilingUI = computed(() => hasJobId.value && !hasResult.value);
 const compilingHint = computed(() => (isCompiling.value ? '请稍候，正在编译...' : '上传完成，等待编译开始...'));
 const effectiveStatusText = computed(() => statusText.value || compilingHint.value);
 
@@ -175,6 +158,30 @@ const closeSSEConnection = () => {
   }
   isUploading.value = false;
   isSubmitting.value = false;
+};
+
+const clearRateLimitTimer = () => {
+  if (rateLimitTimer.value) {
+    clearInterval(rateLimitTimer.value);
+    rateLimitTimer.value = null;
+  }
+  rateLimitCountdown.value = 0;
+};
+
+const startRateLimitCountdown = (seconds: number) => {
+  clearRateLimitTimer();
+  rateLimitCountdown.value = seconds;
+
+  rateLimitTimer.value = setInterval(() => {
+    rateLimitCountdown.value--;
+    if (rateLimitCountdown.value <= 0) {
+      clearRateLimitTimer();
+      // 倒计时结束时清除错误信息
+      if (error.value?.includes('请求频率过高')) {
+        error.value = null;
+      }
+    }
+  }, 1000);
 };
 
 const resetSubmitArea = () => {
@@ -213,6 +220,10 @@ const processFile = (file: File) => {
 const handleFileChange = (event: Event) => {
   closeSSEConnection(); // 关闭之前的SSE连接
   jobId.value = null; // 重置作业ID
+  compilationStatus.value = null; // 重置编译状态
+  compilationOutput.value = null;
+  compilationTime.value = null;
+  statusText.value = null;
   const input = event.target as HTMLInputElement;
   if (input.files && input.files.length > 0) {
     processFile(input.files[0]);
@@ -235,6 +246,10 @@ const onDrop = (event: DragEvent) => {
     const file = event.dataTransfer.files[0];
     closeSSEConnection();
     jobId.value = null;
+    compilationStatus.value = null; // 重置编译状态
+    compilationOutput.value = null;
+    compilationTime.value = null;
+    statusText.value = null;
     processFile(file);
     if (fileInputRef.value) fileInputRef.value.value = '';
   }
@@ -246,14 +261,15 @@ const triggerChooseFile = () => {
 
 const clearFile = () => {
   closeSSEConnection();
+  clearRateLimitTimer();
   selectedFile.value = null;
   error.value = null;
   compilationStatus.value = null;
   compilationOutput.value = null;
   compilationTime.value = null;
   statusText.value = null;
+  jobId.value = null; // 重置jobId
   uploadProgress.value = 0;
-  uploadCompleted.value = false;
   if (fileInputRef.value) fileInputRef.value.value = '';
 };
 
@@ -334,7 +350,6 @@ const handleSSEMessages = (data: any) => {
 
 const handleSSEError = (err: any) => {
   console.error('SSE连接错误:', err);
-  error.value = '监听编译状态时出错';
   compilationStatus.value = 'error';
   statusText.value = '连接中断，请刷新页面重试';
   resetSubmitArea();
@@ -346,7 +361,8 @@ const handleSubmit = async () => {
     return;
   }
 
-  closeSSEConnection(); // 关闭之前的SSE连接
+  // 重置状态
+  closeSSEConnection();
   isUploading.value = true;
   error.value = null;
   compilationStatus.value = null;
@@ -355,29 +371,43 @@ const handleSubmit = async () => {
   statusText.value = null;
   jobId.value = null;
   uploadProgress.value = 0;
-  uploadCompleted.value = false;
 
   console.log('开始上传代码文件', selectedFile.value.name);
 
   try {
-    // 使用SSE监听编译状态
-    sseSource.value = await sandboxService.submitCodeWithSSE(
+    // 第一步：提交代码
+    const submittedJobId = await sandboxService.submitCode(
       selectedFile.value,
-      handleSSEMessages,
-      handleSSEError,
       (progressPercent: number) => {
         uploadProgress.value = progressPercent;
-        if (progressPercent >= 100) {
-          // 上传完成，等待编译阶段：显示中间页面与动画
-          uploadCompleted.value = true;
-        }
       }
     );
+
+    jobId.value = submittedJobId;
+    isUploading.value = false;
+
+    // 第二步：监听编译状态
+    sseSource.value = sandboxService.listenToCompilationStream(
+      submittedJobId,
+      handleSSEMessages,
+      handleSSEError
+    );
+
   } catch (err: any) {
-    console.error('创建SSE连接错误:', err);
-    error.value = err.message || '创建SSE连接失败';
-    compilationStatus.value = 'error';
-    statusText.value = '提交过程中发生错误';
+    console.error('代码提交失败:', err);
+
+    // 检查是否为Rate Limit错误
+    if (err instanceof RateLimitError) {
+      if (err.retryAfterSeconds) {
+        error.value = `请求频率过高，请${err.retryAfterSeconds}秒后重试`;
+        startRateLimitCountdown(err.retryAfterSeconds);
+      } else {
+        error.value = '请求频率过高，请稍后重试';
+      }
+    } else {
+      error.value = err.message || '代码提交失败';
+    }
+
     isUploading.value = false;
     uploadProgress.value = 0;
   }
@@ -398,9 +428,10 @@ const formatDate = (timestamp: number): string => {
   return date.toLocaleString('zh-CN');
 };
 
-// 组件卸载时清理SSE连接
+// 组件卸载时清理SSE连接和定时器
 onUnmounted(() => {
   closeSSEConnection();
+  clearRateLimitTimer();
 });
 </script>
 
@@ -508,13 +539,11 @@ onUnmounted(() => {
 
 .file-label.dragging {
   border-color: var(--accent-color);
-  background: repeating-linear-gradient(
-      45deg,
+  background: repeating-linear-gradient(45deg,
       rgba(74, 222, 128, 0.12),
       rgba(74, 222, 128, 0.12) 8px,
       rgba(74, 222, 128, 0.06) 8px,
-      rgba(74, 222, 128, 0.06) 16px
-  );
+      rgba(74, 222, 128, 0.06) 16px);
 }
 
 .file-label.uploading::before {
@@ -524,12 +553,10 @@ onUnmounted(() => {
   left: 0;
   height: 100%;
   width: var(--upload-progress, 0%);
-  background: linear-gradient(
-    90deg,
-    rgba(74, 222, 128, 0.08) 0%,
-    rgba(74, 222, 128, 0.12) 50%,
-    rgba(74, 222, 128, 0.08) 100%
-  );
+  background: linear-gradient(90deg,
+      rgba(74, 222, 128, 0.08) 0%,
+      rgba(74, 222, 128, 0.12) 50%,
+      rgba(74, 222, 128, 0.08) 100%);
   border-radius: 4px;
   transition: width 0.3s ease;
   z-index: -1;
@@ -719,14 +746,34 @@ onUnmounted(() => {
   animation: loaderPulse 1.1s steps(2, end) infinite;
 }
 
-.pixel-loader span:nth-child(1) { animation-delay: 0s; }
-.pixel-loader span:nth-child(2) { animation-delay: 0.1s; }
-.pixel-loader span:nth-child(3) { animation-delay: 0.2s; }
-.pixel-loader span:nth-child(4) { animation-delay: 0.3s; }
+.pixel-loader span:nth-child(1) {
+  animation-delay: 0s;
+}
+
+.pixel-loader span:nth-child(2) {
+  animation-delay: 0.1s;
+}
+
+.pixel-loader span:nth-child(3) {
+  animation-delay: 0.2s;
+}
+
+.pixel-loader span:nth-child(4) {
+  animation-delay: 0.3s;
+}
 
 @keyframes loaderPulse {
-  0%, 100% { filter: brightness(1); opacity: 1; }
-  50% { filter: brightness(0.6); opacity: 0.8; }
+
+  0%,
+  100% {
+    filter: brightness(1);
+    opacity: 1;
+  }
+
+  50% {
+    filter: brightness(0.6);
+    opacity: 0.8;
+  }
 }
 
 .compiling-hint {
@@ -776,8 +823,15 @@ onUnmounted(() => {
 }
 
 @keyframes pulse {
-  0%, 100% { opacity: 1; }
-  50% { opacity: 0.7; }
+
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.7;
+  }
 }
 
 /* 状态图标 */
@@ -824,8 +878,13 @@ onUnmounted(() => {
 }
 
 @keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
+  from {
+    transform: rotate(0deg);
+  }
+
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 /* 状态信息 */
@@ -891,9 +950,17 @@ onUnmounted(() => {
   background: #555;
 }
 
-.console-dots span:nth-child(1) { background: #ff5f57; }
-.console-dots span:nth-child(2) { background: #ffbd2e; }
-.console-dots span:nth-child(3) { background: #28ca42; }
+.console-dots span:nth-child(1) {
+  background: #ff5f57;
+}
+
+.console-dots span:nth-child(2) {
+  background: #ffbd2e;
+}
+
+.console-dots span:nth-child(3) {
+  background: #28ca42;
+}
 
 .console-content {
   font-family: 'SF Mono', 'Monaco', 'Inconsolata', 'Roboto Mono', monospace;
@@ -924,6 +991,29 @@ onUnmounted(() => {
 
 .console-content::-webkit-scrollbar-thumb:hover {
   background: #777;
+}
+
+/* Rate Limit 错误样式 */
+.error-message.rate-limit-error {
+  background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  border: 2px solid rgba(239, 68, 68, 0.3);
+  border-radius: 6px;
+  padding: 12px 16px;
+  animation: rateLimit 2s infinite;
+}
+
+@keyframes rateLimit {
+
+  0%,
+  100% {
+    border-color: rgba(239, 68, 68, 0.3);
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.1) 0%, rgba(239, 68, 68, 0.05) 100%);
+  }
+
+  50% {
+    border-color: rgba(239, 68, 68, 0.5);
+    background: linear-gradient(90deg, rgba(239, 68, 68, 0.15) 0%, rgba(239, 68, 68, 0.08) 100%);
+  }
 }
 
 .submit-footer {

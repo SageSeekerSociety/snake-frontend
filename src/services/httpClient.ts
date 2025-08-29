@@ -1,5 +1,6 @@
 import axios, { AxiosInstance, InternalAxiosRequestConfig } from "axios";
 import router from "../router";
+import { RateLimitError } from "../types/RateLimitError";
 
 export const runtimeConfig = {
   VITE_API_URL:
@@ -158,6 +159,13 @@ const setupResponseInterceptor = (instance: AxiosInstance) => {
         } finally {
           isRefreshing = false;
         }
+      }
+
+      // 处理 Rate Limit 429 错误
+      if (error.response?.status === 429) {
+        const retryAfter = error.response.headers['retry-after'];
+        const retryAfterSeconds = retryAfter ? parseInt(retryAfter, 10) : undefined;
+        return Promise.reject(new RateLimitError(retryAfterSeconds));
       }
 
       return Promise.reject(error);

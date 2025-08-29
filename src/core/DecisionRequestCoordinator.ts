@@ -1,6 +1,7 @@
 import { SSE } from "sse.js"; // Assuming sse.js library
 import { BatchExecutionItem, SseEventData } from "../types/Api"; // Define your BatchExecutionItem type
 import { sandboxService } from "../services/api";
+import { RateLimitError } from "../types/RateLimitError";
 
 // Type for the data passed when resolving the decision promise
 export interface DecisionData {
@@ -34,6 +35,11 @@ export class DecisionRequestCoordinator {
   private activeSseConnection: SSE | null = null;
   private batchSendScheduled: boolean = false;
   private pendingResultsCount: number = 0;
+  
+  // 重试配置
+  private readonly MAX_RETRY_ATTEMPTS = 5;
+  private readonly BASE_DELAY_MS = 1000;
+  private readonly MAX_JITTER_MS = 200;
 
   /**
    * Queues a decision request from a strategy. This is the main entry point.
@@ -72,6 +78,32 @@ export class DecisionRequestCoordinator {
   }
 
   /**
+   * 计算重试延迟时间（包含 jitter）
+   */
+  private calculateRetryDelay(attempt: number, retryAfterSeconds?: number): number {
+    let baseDelay: number;
+    
+    if (retryAfterSeconds) {
+      // 如果服务器指定了 Retry-After，使用该值作为基础延迟
+      baseDelay = retryAfterSeconds * 1000;
+    } else {
+      // 指数退避：1s, 2s, 4s, 8s, 16s
+      baseDelay = this.BASE_DELAY_MS * Math.pow(2, attempt - 1);
+    }
+    
+    // 添加随机 jitter (0-200ms)
+    const jitter = Math.random() * this.MAX_JITTER_MS;
+    return baseDelay + jitter;
+  }
+
+  /**
+   * 等待指定时间
+   */
+  private delay(ms: number): Promise<void> {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
    * Processes the queue, submits a batch, and establishes the SSE connection if not already active.
    */
   private async dispatchQueuedRequests(): Promise<void> {
@@ -87,34 +119,66 @@ export class DecisionRequestCoordinator {
 
     const batchItems = batchToProcess.map((req) => req.item);
 
-    try {
-      // Step 1: Always submit the batch for the current tick.
-      await sandboxService.submitBatchExecution(batchItems);
+    // 带重试的批量提交
+    await this.submitBatchWithRetry(batchItems);
+  }
 
-      // Step 2: Establish the SSE connection on the very first batch submission.
-      if (!this.activeSseConnection) {
-        const sessionId = batchItems[0]?.sessionId;
-        if (!sessionId)
-          throw new Error("Session ID is missing in the first batch.");
+  /**
+   * 带重试机制的批量提交
+   */
+  private async submitBatchWithRetry(batchItems: BatchExecutionItem[]): Promise<void> {
+    let attempt = 1;
+    let lastError: any = null;
 
-        // console.log(
-        //   `Establishing persistent SSE connection for session ${sessionId}...`
-        // );
-        this.activeSseConnection = sandboxService.listenToExecutionStream(
-          sessionId,
-          0, // Always listen from the beginning of the game.
-          (eventData) => this.handleSseEvent(eventData),
-          (error) => this.handleSseConnectionError(error)
+    while (attempt <= this.MAX_RETRY_ATTEMPTS) {
+      try {
+        // Step 1: Submit the batch
+        await sandboxService.submitBatchExecution(batchItems);
+
+        // Step 2: Establish the SSE connection on the very first batch submission
+        if (!this.activeSseConnection) {
+          const sessionId = batchItems[0]?.sessionId;
+          if (!sessionId)
+            throw new Error("Session ID is missing in the first batch.");
+
+          this.activeSseConnection = sandboxService.listenToExecutionStream(
+            sessionId,
+            0, // Always listen from the beginning of the game.
+            (eventData) => this.handleSseEvent(eventData),
+            (error) => this.handleSseConnectionError(error)
+          );
+        }
+
+        // 成功，退出重试循环
+        return;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // 检查是否是 Rate Limit 错误
+        if (error instanceof RateLimitError) {
+          console.warn(`Coordinator: Rate limit hit (attempt ${attempt}/${this.MAX_RETRY_ATTEMPTS}), retrying...`);
+          
+          if (attempt < this.MAX_RETRY_ATTEMPTS) {
+            const delayMs = this.calculateRetryDelay(attempt, error.retryAfterSeconds);
+            console.log(`Coordinator: Waiting ${Math.round(delayMs)}ms before retry`);
+            await this.delay(delayMs);
+            attempt++;
+            continue;
+          }
+        }
+        
+        // 非 Rate Limit 错误或重试次数用尽，直接抛出
+        console.error(
+          `Coordinator: Batch submission failed (attempt ${attempt}/${this.MAX_RETRY_ATTEMPTS}):`,
+          error
         );
+        break;
       }
-    } catch (error) {
-      console.error(
-        "Coordinator: Batch submission or SSE initiation failed:",
-        error
-      );
-      // If the initial submission itself fails, reject the promises for this batch.
-      this.rejectPromisesForBatch(batchItems, error);
     }
+
+    // 所有重试都失败了，拒绝这批请求的 Promise
+    this.rejectPromisesForBatch(batchItems, lastError || new Error('Max retry attempts reached'));
   }
 
   /**
