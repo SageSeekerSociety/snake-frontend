@@ -12,7 +12,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, vortexDat
     return "无法获取游戏状态";
   }
 
-  const { snakes, foodItems, obstacles, treasureChests = [], keys = [] } = frame.gameState;
+  const { snakes, foodItems, obstacles, treasureChests = [], keys = [] } = frame.gameState.entities;
   
   // Start with remaining ticks (use current tick for demonstration)
   let input = `${frame.tick}\n`;
