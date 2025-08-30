@@ -82,17 +82,17 @@ export const GameConfig = {
     LATE_PHASE_START_TICK: 201,
 
     // Generation Timing
-    GENERATION_PERIOD: 3,   // INCREASED FREQUENCY: Run logic more often
-    MAX_BURST_PER_PERIOD: 4, // INCREASED BURST: Allow more items per cycle
+    GENERATION_PERIOD: 3,
+    MAX_BURST_PER_PERIOD: 5,
 
     // Dynamic Target Calculation Parameters (SIGNIFICANTLY INCREASED for Density)
-    TARGET_NORMAL_BASE: 8,       // INCREASED BASE
-    TARGET_NORMAL_PER_SNAKE: 2.5,  // SIGNIFICANTLY INCREASED: More food per snake (12 snakes -> 30, + base 8 = ~38)
-    TARGET_GROWTH_BASE: 1,
+    TARGET_NORMAL_BASE: 20,       // INCREASED BASE
+    TARGET_NORMAL_PER_SNAKE: 3,  // SIGNIFICANTLY INCREASED: More food per snake (12 snakes -> 30, + base 8 = ~38)
+    TARGET_GROWTH_BASE: 2,
     TARGET_GROWTH_PER_AVG_LENGTH: 25, // Less impact from length
-    TARGET_GROWTH_PER_SNAKE: 0.4,    // INCREASED: More growth per snake (12 snakes -> 4.8, + base 1 = ~6)
+    TARGET_GROWTH_PER_SNAKE: 1,    // INCREASED: More growth per snake (12 snakes -> 4.8, + base 1 = ~6)
     TARGET_TRAP_BASE: 1,
-    TARGET_TRAP_PER_TOTAL_SCORE: 180, // Slightly less sensitive to score bursts
+    TARGET_TRAP_PER_TOTAL_SCORE: 150, // Slightly less sensitive to score bursts
 
     // Upper Caps (SIGNIFICANTLY INCREASED)
     TARGET_NORMAL_MAX_CAP: 70, // Much higher cap for normal food
@@ -174,10 +174,10 @@ export const GameConfig = {
     SECOND_TREASURE_TICK: 220,
     
     // Treasure scoring
-    BASE_SCORE: 30,
-    SCORE_MULTIPLIER: 0.6,
-    MIN_SCORE: 30,
-    MAX_SCORE: 75,
+    BASE_SCORE: 20,
+    SCORE_MULTIPLIER: 0.5,
+    MIN_SCORE: 20,
+    MAX_SCORE: 40,
     
     // Key mechanics
     KEY_HOLD_TIME_LIMIT: 30, // ticks before auto-drop
@@ -188,7 +188,7 @@ export const GameConfig = {
     
     // Key quantity calculation: max(2, floor(alive_snakes / 2))
     MIN_KEYS_PER_TREASURE: 2,
-    MAX_KEYS_PER_TREASURE: 4,
+    MAX_KEYS_PER_TREASURE: 5,
     KEYS_PER_SNAKE_DIVISOR: 2,
   },
 

@@ -14,7 +14,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, currentUs
 
   const { snakes, foodItems, obstacles, treasureChests = [], keys = [] } = frame.gameState.entities;
   
-  // Start with remaining ticks (use current tick for demonstration)
+  // Start with remaining ticks
   let input = `${GameConfig.TOTAL_TICKS - frame.tick}\n`;
 
   // Special items (food, obstacles, treasure chests, and keys)

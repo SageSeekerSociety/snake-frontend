@@ -98,19 +98,23 @@
               <li><b>宝箱</b>
                 <ul>
                   <li>仅在游戏中期和后期刷新，每局游戏最多出现两个。</li>
-                  <li>其分数在刷新时根据战局动态计算并固定，旨在为落后玩家提供追赶机会。计算公式为 <code>基础分 + (第一名分数 - 非第一名平均分) * 0.6</code>，最终分数被限制在30到75之间。
+                  <li>其分数在刷新时根据战局动态计算并固定，旨在为落后玩家提供追赶机会。计算公式为
+                    <code>基础分（{{ GameConfig.TREASURE_SYSTEM.BASE_SCORE }}） + (第一名分数 - 非第一名平均分) * {{ GameConfig.TREASURE_SYSTEM.SCORE_MULTIPLIER }}</code>，最终分数被限制在{{
+                      GameConfig.TREASURE_SYSTEM.MIN_SCORE }}到{{ GameConfig.TREASURE_SYSTEM.MAX_SCORE }}之间。
                   </li>
                   <li>对于未持有钥匙的蛇，宝箱是一个<b>致命障碍物</b>，触碰即死且护盾无效。</li>
                 </ul>
               </li>
               <li><b>钥匙</b>
                 <ul>
-                  <li>与宝箱同步刷新，数量为 <code>max(2, floor(存活蛇数 / 2))</code>，上限为4把。</li>
+                  <li>与宝箱同步刷新，数量为
+                    <code>max({{ GameConfig.TREASURE_SYSTEM.MIN_KEYS_PER_TREASURE }}, floor(存活蛇数 / {{ GameConfig.TREASURE_SYSTEM.KEYS_PER_SNAKE_DIVISOR }}))</code>，上限为{{
+                      GameConfig.TREASURE_SYSTEM.MAX_KEYS_PER_TREASURE }}把。</li>
                   <li>蛇头触碰地上的钥匙即可拾取。</li>
                   <li><b>掉落规则</b>：
                     <ul>
                       <li>持有者死亡时，钥匙会掉落在其头部位置。</li>
-                      <li>连续持有钥匙超过30个游戏刻，钥匙会自动从持有者身上脱落，出现在其头部侧方。</li>
+                      <li>连续持有钥匙超过{{ GameConfig.TREASURE_SYSTEM.KEY_HOLD_TIME_LIMIT }}个游戏刻，钥匙会自动从持有者身上脱落，出现在其头部侧方。</li>
                     </ul>
                   </li>
                 </ul>
@@ -349,7 +353,8 @@ y_key1 x_key1 holder_id1 remaining_time1
                 <ul>
                   <li>当前安全区为 <code>7 5 32 24</code>。</li>
                   <li>最终的收缩将在第 <b>228</b> tick 开始（届时边界变为 <code>8 5 31 24</code>），并将在第 <b>241</b> tick 完成，最终边界为
-                    <code>10 7 29 22</code>。</li>
+                    <code>10 7 29 22</code>。
+                  </li>
                 </ul>
               </li>
               <li><b>Memory数据</b>: 上一回合存储了 <code>1 5 13</code>。</li>
@@ -444,6 +449,7 @@ TARGET:10,20;STATE:ATTACK;PREV_SCORE:150</pre>
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
+import { GameConfig } from '../config/GameConfig';
 
 // 当前激活的标签页
 const activeTab = ref('rules');

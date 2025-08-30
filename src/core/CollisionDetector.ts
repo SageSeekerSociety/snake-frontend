@@ -254,18 +254,17 @@ export class CollisionDetector {
       }
     } // End outer loop (snakes)
 
-    // Filter results to ensure snakes marked as fatally collided only appear once as the primary 'snake'
-    // (Although the current logic mostly prevents duplicates by breaking loops)
-    // This step might be slightly redundant with the current break logic but adds robustness.
-    const finalResults = collisionResults.filter((result) => {
-      // Keep all non-fatal collisions (food)
-      if (result.type === "food") return true;
-      // Keep fatal collisions only if the primary snake isn't one already processed
-      // (This check might be complex depending on head-on rules)
-      // Let's simplify: return all detected fatal collisions, GameManager will handle the consequences.
-      return true;
-    });
+    // 将致命事件置于前面，同时保持同类事件的相对稳定顺序
+    const fatalTypes = new Set<CollisionResult["type"]>([
+      "wall",
+      "obstacle",
+      "snake",
+      "treasure_fatal",
+    ]);
 
-    return finalResults; // Return all detected collision events for this tick
+    const fatalEvents = collisionResults.filter((r) => fatalTypes.has(r.type));
+    const nonFatalEvents = collisionResults.filter((r) => !fatalTypes.has(r.type));
+
+    return [...fatalEvents, ...nonFatalEvents];
   }
 }
