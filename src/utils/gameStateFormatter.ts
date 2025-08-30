@@ -1,6 +1,6 @@
 import { GameRecordingFrame, SerializedFood, SerializedTreasureChest, SerializedKey, SerializedSnake } from "../types/GameRecording";
 import { VortexFieldApiData } from "../types/VortexField";
-import { FoodType } from "../config/GameConfig";
+import { FoodType, GameConfig } from "../config/GameConfig";
 import { EntityType } from "../types/EntityType";
 import { Direction } from "../config/GameConfig";
 
@@ -15,7 +15,7 @@ export function formatGameStateForAlgorithm(frame: GameRecordingFrame, currentUs
   const { snakes, foodItems, obstacles, treasureChests = [], keys = [] } = frame.gameState.entities;
   
   // Start with remaining ticks (use current tick for demonstration)
-  let input = `${frame.tick}\n`;
+  let input = `${GameConfig.TOTAL_TICKS - frame.tick}\n`;
 
   // Special items (food, obstacles, treasure chests, and keys)
   const items = [...foodItems, ...obstacles, ...treasureChests, ...keys];
