@@ -12,7 +12,9 @@
         <!-- 回放控制面板 -->
         <div class="replay-controls pixel-border">
           <div class="replay-info">
-            <div class="replay-name">{{ currentRecording?.name || '未知录制' }}</div>
+            <div class="replay-name">
+              {{ currentRecording?.name || "未知录制" }}
+            </div>
             <div class="replay-progress">
               帧 {{ currentFrame }} / {{ totalFrames - 1 }}
             </div>
@@ -22,10 +24,18 @@
             <button @click="previousFrame" class="pixel-button control-button">
               上一帧
             </button>
-            <button v-if="!isPlaying" @click="play" class="pixel-button control-button">
+            <button
+              v-if="!isPlaying"
+              @click="play"
+              class="pixel-button control-button"
+            >
               播放
             </button>
-            <button v-else-if="isPaused" @click="resume" class="pixel-button control-button">
+            <button
+              v-else-if="isPaused"
+              @click="resume"
+              class="pixel-button control-button"
+            >
               继续
             </button>
             <button v-else @click="pause" class="pixel-button control-button">
@@ -37,19 +47,30 @@
             <button @click="stop" class="pixel-button control-button">
               停止
             </button>
-            <button @click="copyCurrentFrameState" class="pixel-button control-button copy-button"
-              title="复制当前帧状态作为算法输入">
+            <button
+              @click="copyCurrentFrameState"
+              class="pixel-button control-button copy-button"
+              title="复制当前帧状态作为算法输入"
+            >
               复制状态
             </button>
-            <button v-if="currentUserSnakeExists" @click="toggleDebugInfo"
-              class="pixel-button control-button debug-button" title="显示当前用户蛇的调试信息">
+            <button
+              v-if="currentUserSnakeExists"
+              @click="toggleDebugInfo"
+              class="pixel-button control-button debug-button"
+              title="显示当前用户蛇的调试信息"
+            >
               调试信息
             </button>
           </div>
 
           <div class="replay-speed">
             <span class="speed-label">速度:</span>
-            <select v-model="playbackSpeed" @change="updatePlaybackSpeed" class="speed-select">
+            <select
+              v-model="playbackSpeed"
+              @change="updatePlaybackSpeed"
+              class="speed-select"
+            >
               <option value="0.25">0.25x</option>
               <option value="0.5">0.5x</option>
               <option value="1">1x</option>
@@ -59,8 +80,14 @@
           </div>
 
           <div class="replay-timeline">
-            <input type="range" min="0" :max="totalFrames - 1" v-model="currentFrame" @input="seekToFrame"
-              class="timeline-slider" />
+            <input
+              type="range"
+              min="0"
+              :max="totalFrames - 1"
+              v-model="currentFrame"
+              @input="seekToFrame"
+              class="timeline-slider"
+            />
           </div>
 
           <button @click="returnToList" class="pixel-button return-button">
@@ -72,29 +99,70 @@
       <GameUIRight class="game-ui-right" />
 
       <!-- Debug Info Panel for Current User's Snake -->
-      <div v-if="showDebugInfo" ref="debugPanel" class="debug-panel pixel-border"
-        :style="{ left: debugPanelPosition.x + 'px', top: debugPanelPosition.y + 'px' }">
-        <div class="debug-header draggable-header" @mousedown="startDrag" @touchstart="startDrag">
+      <div
+        v-if="showDebugInfo"
+        ref="debugPanel"
+        class="debug-panel pixel-border"
+        :style="{
+          left: debugPanelPosition.x + 'px',
+          top: debugPanelPosition.y + 'px',
+        }"
+      >
+        <div
+          class="debug-header draggable-header"
+          @mousedown="startDrag"
+          @touchstart="startDrag"
+        >
           <span class="debug-title">{{ currentUserSnakeName }} 调试信息</span>
           <button @click="showDebugInfo = false" class="close-button">×</button>
         </div>
         <div class="debug-content">
+          <div v-if="currentUserSnakeDebug.input" class="debug-section">
+            <h4>输入:</h4>
+            <pre class="debug-text">{{
+              currentUserSnakeDebug.input.trim() +
+              "\n" +
+              (currentUserSnakeDebug.oldMemoryData ?? "")
+            }}</pre>
+          </div>
+          <div v-if="currentUserSnakeDebug.output" class="debug-section">
+            <h4>输出决策:</h4>
+            <pre class="debug-text">{{ currentUserSnakeDebug.output }}</pre>
+          </div>
           <div v-if="currentUserSnakeDebug.stderr" class="debug-section">
             <h4>stderr 输出:</h4>
             <pre class="debug-text">{{ currentUserSnakeDebug.stderr }}</pre>
           </div>
           <div v-if="currentUserSnakeDebug.newMemoryData" class="debug-section">
             <h4>Memory Data:</h4>
-            <pre class="debug-text">{{ currentUserSnakeDebug.newMemoryData }}</pre>
+            <pre class="debug-text">{{
+              currentUserSnakeDebug.newMemoryData
+            }}</pre>
           </div>
-          <div v-if="!currentUserSnakeDebug.stderr && !currentUserSnakeDebug.newMemoryData" class="debug-section">
+          <div
+            v-if="
+              !currentUserSnakeDebug.input &&
+              !currentUserSnakeDebug.output &&
+              !currentUserSnakeDebug.stderr &&
+              !currentUserSnakeDebug.newMemoryData
+            "
+            class="debug-section"
+          >
             <p class="no-debug-data">当前帧无调试数据</p>
+          </div>
+          <div class="debug-footer" v-if="currentUserSnakeDebug.workerNodeId || currentUserSnakeDebug.jobId">
+            <span v-if="currentUserSnakeDebug.workerNodeId">Worker Node ID: {{ currentUserSnakeDebug.workerNodeId }}</span>
+            <span v-if="currentUserSnakeDebug.jobId">Job ID: {{ currentUserSnakeDebug.jobId }}</span>
           </div>
         </div>
       </div>
 
       <!-- Game Rankings Modal -->
-      <GameRankings :show="showFinalRankings" :scores="finalScores" @close="closeFinalRankings" />
+      <GameRankings
+        :show="showFinalRankings"
+        :scores="finalScores"
+        @close="closeFinalRankings"
+      />
     </div>
   </div>
 </template>
@@ -134,7 +202,15 @@ const finalScores = ref<any[]>([]);
 const showDebugInfo = ref<boolean>(false);
 const currentUserSnakeExists = ref<boolean>(false);
 const currentUserSnakeName = ref<string>("");
-const currentUserSnakeDebug = ref<{ stderr?: string; newMemoryData?: string }>({});
+const currentUserSnakeDebug = ref<{
+  oldMemoryData?: string;
+  input?: string;
+  output?: string;
+  stderr?: string;
+  newMemoryData?: string;
+  workerNodeId?: string;
+  jobId?: string;
+}>({});
 const debugPanel = ref<HTMLElement | null>(null);
 
 // 拖拽相关状态
@@ -160,7 +236,9 @@ const loadRecording = async (recordingId: string) => {
 
       console.log(`Loaded recording: ${recording.name}`);
     } else {
-      console.error("Failed to load recording or replay manager not initialized");
+      console.error(
+        "Failed to load recording or replay manager not initialized"
+      );
       router.push("/recordings");
     }
   } catch (error) {
@@ -253,14 +331,18 @@ const copyCurrentFrameState = async () => {
     const success = await copyGameStateToClipboard(currentFrame, currentUserId);
     if (success) {
       // 检查是否包含了memory数据
-      const hasMemoryData = currentUserId && currentFrame.gameState.entities.snakes.some((snake: any) => {
-        const snakeStudentId = snake.metadata?.studentId || '';
-        const snakeUsername = snake.metadata?.username || '';
+      const hasMemoryData =
+        currentUserId &&
+        currentFrame.gameState.entities.snakes.some((snake: any) => {
+          const snakeStudentId = snake.metadata?.studentId || "";
+          const snakeUsername = snake.metadata?.username || "";
 
-        return (snakeStudentId === currentUserId ||
-          snakeUsername === currentUserId) &&
-          snake.metadata?.newMemoryData;
-      });
+          return (
+            (snakeStudentId === currentUserId ||
+              snakeUsername === currentUserId) &&
+            snake.metadata?.newMemoryData
+          );
+        });
 
       let message = `已复制第 ${currentFrame.tick} 帧状态到剪贴板`;
       if (hasMemoryData) {
@@ -294,11 +376,15 @@ const toggleDebugInfo = () => {
   showDebugInfo.value = !showDebugInfo.value;
 
   // 如果是首次打开，设置默认位置为右上角
-  if (showDebugInfo.value && debugPanelPosition.value.x === 20 && debugPanelPosition.value.y === 20) {
+  if (
+    showDebugInfo.value &&
+    debugPanelPosition.value.x === 20 &&
+    debugPanelPosition.value.y === 20
+  ) {
     const viewportWidth = window.innerWidth;
     debugPanelPosition.value = {
       x: viewportWidth - 370, // 面板宽度350 + 20px边距
-      y: 20
+      y: 20,
     };
   }
 };
@@ -316,31 +402,40 @@ const updateCurrentUserSnakeDebug = () => {
     return;
   }
 
-  const currentUserId = authState.user.id?.toString() || authState.user.username;
+  const currentUserId =
+    authState.user.id?.toString();
   const currentUserUsername = authState.user.username;
 
   // 查找当前用户的蛇
-  const userSnake = currentFrame.gameState.entities.snakes.find((snake: any) => {
-    const snakeStudentId = snake.metadata?.studentId || '';
-    const snakeUsername = snake.metadata?.username || '';
-    const snakeName = snake.metadata?.name || '';
+  const userSnake = currentFrame.gameState.entities.snakes.find(
+    (snake: any) => {
+      const snakeUserId = String(snake.metadata?.userId) || "";
+      const snakeStudentId = snake.metadata?.studentId || "";
+      const snakeUsername = snake.metadata?.username || "";
 
-    // 匹配逻辑：studentId、username或name包含用户标识
-    return snakeStudentId === currentUserId ||
-      snakeStudentId === currentUserUsername ||
-      snakeUsername === currentUserUsername ||
-      snakeName.includes(currentUserUsername);
-  });
+      return (
+        snakeUserId === currentUserId ||
+        snakeStudentId === currentUserUsername ||
+        snakeUsername === currentUserUsername
+      );
+    }
+  );
 
   if (userSnake) {
     currentUserSnakeExists.value = true;
-    currentUserSnakeName.value = userSnake.metadata?.name || currentUserUsername;
+    currentUserSnakeName.value =
+      userSnake.metadata?.name || currentUserUsername;
 
     // 提取调试信息
     const metadata = userSnake.metadata || {};
     currentUserSnakeDebug.value = {
-      stderr: metadata.stderr || undefined,
-      newMemoryData: metadata.newMemoryData || undefined
+      oldMemoryData: currentUserSnakeDebug.value.newMemoryData,
+      input: metadata.input,
+      output: metadata.output,
+      stderr: metadata.stderr,
+      newMemoryData: metadata.newMemoryData,
+      workerNodeId: metadata.workerNodeId,
+      jobId: metadata.jobId,
     };
   } else {
     currentUserSnakeExists.value = false;
@@ -354,19 +449,19 @@ const startDrag = (event: MouseEvent | TouchEvent) => {
   event.preventDefault();
   isDragging.value = true;
 
-  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+  const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+  const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
 
   dragOffset.value = {
     x: clientX - debugPanelPosition.value.x,
-    y: clientY - debugPanelPosition.value.y
+    y: clientY - debugPanelPosition.value.y,
   };
 
   // 添加全局监听器
-  document.addEventListener('mousemove', onDrag);
-  document.addEventListener('mouseup', stopDrag);
-  document.addEventListener('touchmove', onDrag);
-  document.addEventListener('touchend', stopDrag);
+  document.addEventListener("mousemove", onDrag);
+  document.addEventListener("mouseup", stopDrag);
+  document.addEventListener("touchmove", onDrag);
+  document.addEventListener("touchend", stopDrag);
 };
 
 const onDrag = (event: MouseEvent | TouchEvent) => {
@@ -374,8 +469,8 @@ const onDrag = (event: MouseEvent | TouchEvent) => {
 
   event.preventDefault();
 
-  const clientX = 'touches' in event ? event.touches[0].clientX : event.clientX;
-  const clientY = 'touches' in event ? event.touches[0].clientY : event.clientY;
+  const clientX = "touches" in event ? event.touches[0].clientX : event.clientX;
+  const clientY = "touches" in event ? event.touches[0].clientY : event.clientY;
 
   let newX = clientX - dragOffset.value.x;
   let newY = clientY - dragOffset.value.y;
@@ -397,10 +492,10 @@ const stopDrag = () => {
   isDragging.value = false;
 
   // 移除全局监听器
-  document.removeEventListener('mousemove', onDrag);
-  document.removeEventListener('mouseup', stopDrag);
-  document.removeEventListener('touchmove', onDrag);
-  document.removeEventListener('touchend', stopDrag);
+  document.removeEventListener("mousemove", onDrag);
+  document.removeEventListener("mouseup", stopDrag);
+  document.removeEventListener("touchmove", onDrag);
+  document.removeEventListener("touchend", stopDrag);
 };
 
 // 监听回放管理器状态变化
@@ -563,13 +658,13 @@ onMounted(() => {
 }
 
 .replay-name {
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 12px;
   color: #4ade80;
 }
 
 .replay-progress {
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 10px;
   color: #aaa;
 }
@@ -604,7 +699,7 @@ onMounted(() => {
 }
 
 .speed-label {
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 10px;
   color: #aaa;
 }
@@ -614,7 +709,7 @@ onMounted(() => {
   color: #fff;
   border: 1px solid #4a4a5e;
   padding: 4px;
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 10px;
 }
 
@@ -697,9 +792,18 @@ onMounted(() => {
 }
 
 .debug-title {
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 10px;
   font-weight: bold;
+}
+
+.debug-footer {
+  font-family: "Press Start 2P", monospace;
+  font-size: 10px;
+  color: #aaa;
+  text-align: center;
+  padding: 20px;
+  margin: 0;
 }
 
 .close-button {
@@ -732,7 +836,7 @@ onMounted(() => {
 }
 
 .debug-section h4 {
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 10px;
   color: #4ade80;
   margin-bottom: 8px;
@@ -740,7 +844,7 @@ onMounted(() => {
 }
 
 .debug-text {
-  font-family: 'Courier New', monospace;
+  font-family: "Courier New", monospace;
   font-size: 11px;
   color: #e5e5e5;
   background-color: rgba(20, 20, 40, 0.8);
@@ -755,7 +859,7 @@ onMounted(() => {
 }
 
 .no-debug-data {
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 10px;
   color: #aaa;
   text-align: center;

@@ -13,6 +13,8 @@ export interface DecisionData {
   cpuTimeSeconds?: number;
   memoryKb?: number;
   newMemoryData?: string;
+  workerNodeId?: string;
+  jobId?: string;
 }
 
 // Type for the function stored in the promise map
@@ -214,7 +216,9 @@ export class DecisionRequestCoordinator {
         error: !success ? result?.errorDetails ?? eventData.message : undefined,
         cpuTimeSeconds: result?.cpuTimeSeconds,
         memoryKb: result?.memoryKb,
-        newMemoryData: result?.newMemoryData ? atob(result.newMemoryData) : undefined
+        newMemoryData: result?.newMemoryData ? atob(result.newMemoryData) : undefined,
+        workerNodeId: result?.workerNodeId,
+        jobId: result?.jobId,
       };
 
       resolver.resolve(decisionData);
