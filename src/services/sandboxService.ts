@@ -451,9 +451,7 @@ export const formatGameStateForAPI = (
     input += `-1 0 0 39 29\n`; // 无最终目标
   }
 
-  // console.log(input);
-
-  return input;
+  return input.trim();
 };
 
 /**

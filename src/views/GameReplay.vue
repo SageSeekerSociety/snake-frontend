@@ -117,13 +117,9 @@
           <button @click="showDebugInfo = false" class="close-button">×</button>
         </div>
         <div class="debug-content">
-          <div v-if="currentUserSnakeDebug.input" class="debug-section">
+          <div v-if="currentFrameInput" class="debug-section">
             <h4>输入:</h4>
-            <pre class="debug-text">{{
-              currentUserSnakeDebug.input.trim() +
-              "\n" +
-              (currentUserSnakeDebug.oldMemoryData ?? "")
-            }}</pre>
+            <pre class="debug-text">{{ currentFrameInput }}</pre>
           </div>
           <div v-if="currentUserSnakeDebug.output" class="debug-section">
             <h4>输出决策:</h4>
@@ -169,7 +165,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch, nextTick } from "vue";
+import { ref, onMounted, onUnmounted, watch, nextTick, computed } from "vue";
 import { useRouter } from "vue-router";
 import GameUILeft from "../components/GameUILeft.vue";
 import GameUIRight from "../components/GameUIRight.vue";
@@ -324,9 +320,33 @@ const returnToList = () => {
   router.push("/recordings");
 };
 
+const currentFrameInput = computed(() => {
+  if (currentUserSnakeDebug.value.input) {
+    return (currentUserSnakeDebug.value.input.trim() + '\n' + (currentUserSnakeDebug.value.oldMemoryData ?? "")).trim();
+  }
+  return null;
+})
+
 // 复制当前帧状态作为算法输入
 const copyCurrentFrameState = async () => {
   if (!replayManager.value) return;
+
+  if (currentFrameInput.value) {
+    // 已经有输入数据，直接复制
+    try {
+      await navigator.clipboard.writeText(
+        currentFrameInput.value
+      );
+      eventBus.emit(
+        GameEventType.UI_NOTIFICATION,
+        "已复制当前帧输入到剪贴板"
+      );
+    } catch (error) {
+      console.error("Error copying to clipboard:", error);
+      eventBus.emit(GameEventType.UI_NOTIFICATION, "复制失败，请手动复制");
+    }
+    return;
+  }
 
   const currentFrame = replayManager.value.getCurrentFrame();
   if (!currentFrame) {

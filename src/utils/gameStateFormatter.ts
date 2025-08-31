@@ -214,3 +214,7 @@ export async function copyGameStateToClipboard(frame: GameRecordingFrame, curren
     return false;
   }
 }
+
+export async function copyToClipboard(content: string): Promise<void> {
+  await navigator.clipboard.writeText(content);
+}
