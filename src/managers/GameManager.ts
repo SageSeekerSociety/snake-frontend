@@ -239,7 +239,7 @@ export class GameManager {
 
     try {
       // 组装完整的初始游戏状态（第0帧）
-      const initialGameState = this.assembleGameState();
+      const initialGameState = this.assembleGameStateForRecording();
       
       // Initial treasure data is handled by treasure system internally
 
@@ -259,6 +259,21 @@ export class GameManager {
    * Assembles complete GameState from subsystems
    */
   private assembleGameState(): GameState {
+    const entityState = this.entityManager.getEntityState();
+    const vortexFieldData = this.vortexFieldManager.getApiData();
+    const currentTick = this.gameClock.getCurrentTick();
+    
+    return {
+      entities: entityState,
+      vortexField: vortexFieldData,
+      safeZone: this.safeZoneManager.getAlgorithmInfo(currentTick)
+    };
+  }
+
+  /**
+   * Assembles complete GameState from subsystems
+   */
+  private assembleGameStateForRecording(): GameState {
     const entityState = this.entityManager.getEntityState();
     const vortexFieldData = this.vortexFieldManager.getApiData();
     const currentTick = this.gameClock.getCurrentTick();
@@ -353,7 +368,7 @@ export class GameManager {
 
     try {
       // Assemble complete game state
-      const gameState = this.assembleGameState();
+      const gameState = this.assembleGameStateForRecording();
       
       console.log(`Recording frame at tick ${tick}`);
 
