@@ -96,14 +96,11 @@ export class GameRecordingService {
           safeZone: initialGameState.safeZone ? this.sanitizeObject(initialGameState.safeZone) : undefined
         };
 
-        // 添加初始帧（tick为0）
-        const initialFrame: GameRecordingFrame = {
+        this.recording.initialFrame = {
           tick: 0,
           gameState: stateCopy
         };
-
-        this.recording.frames.push(initialFrame);
-        console.log("Recorded initial game state as frame 0");
+        console.log("Recorded initial game state");
       } catch (error) {
         console.error("Error recording initial frame:", error);
       }

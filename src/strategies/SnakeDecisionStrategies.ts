@@ -244,7 +244,14 @@ export class APIDecisionStrategy implements SnakeDecisionStrategy {
         `Tick ${remainingTicks}: Received decision data for ${this.username} (ClientReqId: ${clientRequestId}):`,
         decisionData
       );
-      snake.setMetadata({ input: gameStateStr, output: decisionData.output, workerNodeId: decisionData.workerNodeId, jobId: decisionData.jobId });
+      snake.setMetadata({
+        input: gameStateStr,
+        output: decisionData.output,
+        workerNodeId: decisionData.workerNodeId,
+        jobId: decisionData.jobId,
+        cpuTimeSeconds: decisionData.cpuTimeSeconds,
+        memoryKb: decisionData.memoryKb,
+      });
       if (decisionData.stderr) {
         snake.setMetadata({ stderr: decisionData.stderr });
       }

@@ -266,7 +266,7 @@ export class GameManager {
     return {
       entities: entityState,
       vortexField: vortexFieldData,
-      safeZone: this.safeZoneManager.getAlgorithmInfo(currentTick)
+      safeZone: this.safeZoneManager.serialize(currentTick)
     };
   }
 
@@ -355,6 +355,8 @@ export class GameManager {
       // Assemble complete game state
       const gameState = this.assembleGameState();
       
+      console.log(`Recording frame at tick ${tick}`);
+
       gameRecordingService.recordFrame(
         tick, 
         gameState,

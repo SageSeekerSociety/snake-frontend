@@ -16,7 +16,7 @@
               {{ currentRecording?.name || "未知录制" }}
             </div>
             <div class="replay-progress">
-              帧 {{ currentFrame }} / {{ totalFrames - 1 }}
+              帧 {{ currentFrame + 1 }} / {{ totalFrames }}
             </div>
           </div>
 
@@ -150,9 +150,10 @@
           >
             <p class="no-debug-data">当前帧无调试数据</p>
           </div>
-          <div class="debug-footer" v-if="currentUserSnakeDebug.workerNodeId || currentUserSnakeDebug.jobId">
-            <span v-if="currentUserSnakeDebug.workerNodeId">Worker Node ID: {{ currentUserSnakeDebug.workerNodeId }}</span>
-            <span v-if="currentUserSnakeDebug.jobId">Job ID: {{ currentUserSnakeDebug.jobId }}</span>
+          <div class="debug-footer" v-if="(currentUserSnakeDebug.cpuTimeSeconds && currentUserSnakeDebug.memoryUsageKb) || currentUserSnakeDebug.workerNodeId || currentUserSnakeDebug.jobId">
+            <div v-if="currentUserSnakeDebug.cpuTimeSeconds && currentUserSnakeDebug.memoryUsageKb">{{ (currentUserSnakeDebug.cpuTimeSeconds * 1000).toFixed(2) }}ms / {{ (currentUserSnakeDebug.memoryUsageKb / 1024).toFixed(2) }}MB</div>
+            <div v-if="currentUserSnakeDebug.workerNodeId">Worker Node ID: {{ currentUserSnakeDebug.workerNodeId }}</div>
+            <div v-if="currentUserSnakeDebug.jobId">Job ID: {{ currentUserSnakeDebug.jobId }}</div>
           </div>
         </div>
       </div>
@@ -168,7 +169,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, watch } from "vue";
+import { ref, onMounted, onUnmounted, watch, nextTick } from "vue";
 import { useRouter } from "vue-router";
 import GameUILeft from "../components/GameUILeft.vue";
 import GameUIRight from "../components/GameUIRight.vue";
@@ -191,6 +192,8 @@ const isLoading = ref(true);
 const isPlaying = ref(false);
 const isPaused = ref(false);
 const currentFrame = ref(0);
+// 防止初始化或停止时触发的 seek 盖掉 initialFrame 的渲染
+const suppressSeek = ref<boolean>(false);
 const totalFrames = ref(0);
 const playbackSpeed = ref("1");
 
@@ -210,6 +213,8 @@ const currentUserSnakeDebug = ref<{
   newMemoryData?: string;
   workerNodeId?: string;
   jobId?: string;
+  cpuTimeSeconds?: number;
+  memoryUsageKb?: number;
 }>({});
 const debugPanel = ref<HTMLElement | null>(null);
 
@@ -229,7 +234,7 @@ const loadRecording = async (recordingId: string) => {
       currentRecording.value = recording;
       replayManager.value.loadRecording(recording);
       totalFrames.value = recording.frames.length;
-      currentFrame.value = 0;
+      // 不主动设置 currentFrame，避免触发 watcher 跳到第 0 帧覆盖 initialFrame
 
       // 初始化当前用户蛇的调试信息
       updateCurrentUserSnakeDebug();
@@ -274,10 +279,14 @@ const resume = () => {
 
 const stop = () => {
   if (replayManager.value) {
+    suppressSeek.value = true;
     replayManager.value.stop();
     isPlaying.value = false;
     isPaused.value = false;
-    currentFrame.value = 0;
+    currentFrame.value = replayManager.value.getCurrentFrameIndex();
+    nextTick(() => {
+      suppressSeek.value = false;
+    });
   }
 };
 
@@ -396,6 +405,7 @@ const updateCurrentUserSnakeDebug = () => {
     return;
   }
 
+  const prevFrame = replayManager.value.getPrevFrame(1);
   const currentFrame = replayManager.value.getCurrentFrame();
   if (!currentFrame) {
     currentUserSnakeDebug.value = {};
@@ -406,9 +416,7 @@ const updateCurrentUserSnakeDebug = () => {
     authState.user.id?.toString();
   const currentUserUsername = authState.user.username;
 
-  // 查找当前用户的蛇
-  const userSnake = currentFrame.gameState.entities.snakes.find(
-    (snake: any) => {
+  const isUserSname = (snake: any) => {
       const snakeUserId = String(snake.metadata?.userId) || "";
       const snakeStudentId = snake.metadata?.studentId || "";
       const snakeUsername = snake.metadata?.username || "";
@@ -419,23 +427,30 @@ const updateCurrentUserSnakeDebug = () => {
         snakeUsername === currentUserUsername
       );
     }
-  );
 
-  if (userSnake) {
+  // 查找当前用户的蛇
+  const prevFrameUserSnake = prevFrame
+    ? prevFrame.gameState.entities.snakes.find(isUserSname)
+    : null;
+  const currentFrameUserSnake = currentFrame.gameState.entities.snakes.find(isUserSname);
+
+  if (currentFrameUserSnake) {
     currentUserSnakeExists.value = true;
     currentUserSnakeName.value =
-      userSnake.metadata?.name || currentUserUsername;
+      currentFrameUserSnake.metadata?.name || currentUserUsername;
 
     // 提取调试信息
-    const metadata = userSnake.metadata || {};
+    const currentMeta = currentFrameUserSnake.metadata || {};
     currentUserSnakeDebug.value = {
-      oldMemoryData: currentUserSnakeDebug.value.newMemoryData,
-      input: metadata.input,
-      output: metadata.output,
-      stderr: metadata.stderr,
-      newMemoryData: metadata.newMemoryData,
-      workerNodeId: metadata.workerNodeId,
-      jobId: metadata.jobId,
+      oldMemoryData: prevFrameUserSnake?.metadata.newMemoryData,
+      input: currentMeta.input,
+      output: currentMeta.output,
+      stderr: currentMeta.stderr,
+      newMemoryData: currentMeta.newMemoryData,
+      workerNodeId: currentMeta.workerNodeId,
+      jobId: currentMeta.jobId,
+      cpuTimeSeconds: currentMeta.cpuTimeSeconds,
+      memoryUsageKb: currentMeta.memoryKb
     };
   } else {
     currentUserSnakeExists.value = false;
@@ -533,15 +548,14 @@ const cleanupReplay = () => {
 
 // 监听当前帧变化
 watch(currentFrame, (newFrame) => {
+  if (suppressSeek.value) return;
   if (replayManager.value && !isPlaying.value) {
     replayManager.value.jumpToFrame(newFrame);
   }
-  // 每次帧变化时都更新调试信息
   updateCurrentUserSnakeDebug();
 });
 
 onMounted(() => {
-  // 从会话存储中获取当前回放ID
   const recordingId = sessionStorage.getItem("currentReplayId");
 
   if (!recordingId) {
@@ -798,12 +812,11 @@ onMounted(() => {
 }
 
 .debug-footer {
-  font-family: "Press Start 2P", monospace;
+  font-family: monospace;
   font-size: 10px;
   color: #aaa;
-  text-align: center;
-  padding: 20px;
   margin: 0;
+  opacity: 0.78;
 }
 
 .close-button {
@@ -854,7 +867,7 @@ onMounted(() => {
   white-space: pre-wrap;
   word-wrap: break-word;
   margin: 0;
-  max-height: 200px;
+  max-height: 180px;
   overflow-y: auto;
 }
 

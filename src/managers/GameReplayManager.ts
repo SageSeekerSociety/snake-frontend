@@ -7,7 +7,6 @@ import { Food } from "../entities/Food";
 import { Obstacle } from "../entities/Obstacle";
 import { TreasureChest } from "../entities/TreasureChest";
 import { Key } from "../entities/Key";
-import { EntityType } from "../types/EntityType";
 import { Direction } from "../config/GameConfig";
 
 /**
@@ -17,7 +16,10 @@ export class GameReplayManager {
   private canvasManager: CanvasManager;
   private entityFactory: EntityFactory;
   private recording: GameRecording | null = null;
-  private currentFrameIndex: number = 0;
+  // -1 表示处于 initialFrame（初始状态）
+  private currentFrameIndex: number = -1;
+  // 显示是否处于 initialFrame 状态
+  private atInitialState: boolean = false;
   private isPlaying: boolean = false;
   private isPaused: boolean = false;
   private playbackSpeed: number = 1;
@@ -35,7 +37,9 @@ export class GameReplayManager {
    */
   loadRecording(recording: GameRecording): void {
     this.recording = recording;
-    this.currentFrameIndex = 0; // 设置为0，表示初始状态（第0帧）
+    // 进入回放时渲染 initialFrame，索引设为 -1 表示初始状态
+    this.currentFrameIndex = -1;
+    this.atInitialState = true;
     this.isPlaying = false;
     this.isPaused = false;
 
@@ -49,15 +53,17 @@ export class GameReplayManager {
     this.sendReplayNotification(`总共 ${recording.frames.length} 帧`, true);
     this.sendReplayNotification(`${recording.players.length} 名玩家参与`, true);
 
-    // 渲染第0帧（初始状态）
-    if (recording.frames.length > 0) {
-      const initialFrame = recording.frames[0];
+    // 渲染初始状态（优先使用 initialFrame，兼容旧数据回退到 frames[0]）
+    const initialFrame = recording.initialFrame || recording.frames[0];
+    if (initialFrame) {
       this.renderFrame(initialFrame);
 
       // 更新UI
       eventBus.emit(GameEventType.UI_UPDATE_TIMER, recording.totalTicks);
-      eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(initialFrame.gameState.entities.snakes));
+      eventBus.emit(
+        GameEventType.UI_UPDATE_SCOREBOARD,
+        this.deserializeSnakes(initialFrame.gameState.entities.snakes)
+      );
 
       // 添加初始状态通知
       this.sendReplayNotification("显示游戏初始状态", true);
@@ -80,11 +86,9 @@ export class GameReplayManager {
     // 重置计时器，确保第一帧立即播放
     this.lastRenderTime = 0;
 
-    // 如果是从头开始播放，回到第0帧（因为playbackLoop会自动前进到下一帧）
-    if (this.currentFrameIndex === 0) {
-      // 保持在第0帧，playbackLoop会前进到第1帧
-    } else {
-      // 如果是从中间某一帧开始播放，回到前一帧（playbackLoop会前进到当前帧）
+    // 如果处于初始状态（-1），保持不变，playbackLoop 会推进到第 0 帧；
+    // 如果从中间某一帧开始播放，回到前一帧（playbackLoop 会前进到当前帧）
+    if (this.currentFrameIndex >= 0) {
       this.currentFrameIndex = Math.max(0, this.currentFrameIndex - 1);
     }
 
@@ -131,20 +135,27 @@ export class GameReplayManager {
   stop(): void {
     this.isPlaying = false;
     this.isPaused = false;
-    this.currentFrameIndex = 0;
+    // 回到初始状态
+    this.currentFrameIndex = -1;
+    this.atInitialState = true;
     cancelAnimationFrame(this.animationId);
 
     // 添加停止通知（系统通知）
     this.sendReplayNotification("回放停止并重置", true);
 
-    // Render the first frame if available
-    if (this.recording && this.recording.frames.length > 0) {
-      this.renderFrame(this.recording.frames[0]);
+    // 渲染初始状态（优先 initialFrame）
+    if (this.recording) {
+      const initialFrame = this.recording.initialFrame || this.recording.frames[0];
+      if (initialFrame) {
+        this.renderFrame(initialFrame);
 
-      // Update UI
-      eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.recording.totalTicks);
-      eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
-        this.deserializeSnakes(this.recording.frames[0].gameState.entities.snakes));
+        // Update UI
+        eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.recording.totalTicks);
+        eventBus.emit(
+          GameEventType.UI_UPDATE_SCOREBOARD,
+          this.deserializeSnakes(initialFrame.gameState.entities.snakes)
+        );
+      }
     }
 
     console.log("Stopped playback");
@@ -199,6 +210,10 @@ export class GameReplayManager {
       this.detectSnakeStateChanges(previousSnakes, frame.gameState.entities.snakes);
     }
 
+    // 若处于初始显示状态并跳到第 0 帧，退出初始态
+    if (this.atInitialState && index === 0) {
+      this.atInitialState = false;
+    }
     this.currentFrameIndex = index;
 
     // 获取目标帧
@@ -208,8 +223,7 @@ export class GameReplayManager {
     this.renderFrame(frame);
 
     // Update UI
-    const remainingTicks = this.recording.totalTicks - frame.tick;
-    eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
+    eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.getRemainingTicksForIndex(index));
     eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
       this.deserializeSnakes(frame.gameState.entities.snakes));
 
@@ -221,6 +235,24 @@ export class GameReplayManager {
    */
   nextFrame(): void {
     if (!this.recording) return;
+    
+    console.log(`Current frame index before nextFrame: ${this.currentFrameIndex}`);
+
+    // 特殊处理：从初始态前进一步，只应到第 0 帧
+    if (this.currentFrameIndex === -1 || this.atInitialState) {
+      this.atInitialState = false;
+      this.currentFrameIndex = 0;
+      const frame0 = this.recording.frames[0];
+      this.sendReplayNotification("游戏开始", true);
+      this.renderFrame(frame0);
+      eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.getRemainingTicksForIndex(0));
+      eventBus.emit(
+        GameEventType.UI_UPDATE_SCOREBOARD,
+        this.deserializeSnakes(frame0.gameState.entities.snakes)
+      );
+      // this.sendReplayNotification(`当前帧: ${1}/${this.recording.frames.length}`, true);
+      return;
+    }
 
     const nextIndex = this.currentFrameIndex + 1;
     if (nextIndex < this.recording.frames.length) {
@@ -246,8 +278,7 @@ export class GameReplayManager {
 
       // 渲染帧并更新UI
       this.renderFrame(frame);
-      const remainingTicks = this.recording.totalTicks - frame.tick;
-      eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
+      eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.getRemainingTicksForIndex(nextIndex));
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
         this.deserializeSnakes(frame.gameState.entities.snakes));
 
@@ -273,8 +304,7 @@ export class GameReplayManager {
       // 渲染帧并更新UI
       const frame = this.recording.frames[prevIndex];
       this.renderFrame(frame);
-      const remainingTicks = this.recording.totalTicks - frame.tick;
-      eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
+      eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.getRemainingTicksForIndex(prevIndex));
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
         this.deserializeSnakes(frame.gameState.entities.snakes));
 
@@ -308,8 +338,13 @@ export class GameReplayManager {
         previousSnakes = this.recording.frames[this.currentFrameIndex].gameState.entities.snakes;
       }
 
-      // 前进到下一帧
-      this.currentFrameIndex++;
+      // 前进到下一帧；若处于初始态，则切换到第 0 帧
+      if (this.currentFrameIndex === -1 || this.atInitialState) {
+        this.atInitialState = false;
+        this.currentFrameIndex = 0;
+      } else {
+        this.currentFrameIndex++;
+      }
 
       // 检查是否到达录制结束
       if (this.currentFrameIndex >= this.recording.frames.length) {
@@ -332,8 +367,7 @@ export class GameReplayManager {
       this.renderFrame(frame);
 
       // 更新UI
-      const remainingTicks = this.recording.totalTicks - frame.tick;
-      eventBus.emit(GameEventType.UI_UPDATE_TIMER, remainingTicks);
+      eventBus.emit(GameEventType.UI_UPDATE_TIMER, this.getRemainingTicksForIndex(this.currentFrameIndex));
       eventBus.emit(GameEventType.UI_UPDATE_SCOREBOARD,
         this.deserializeSnakes(frame.gameState.entities.snakes));
     }
@@ -468,6 +502,18 @@ export class GameReplayManager {
   }
 
   /**
+   * 根据帧索引计算剩余 Tick：
+   * - 初始态（-1）：返回 totalTicks
+   * - 第 i 帧（从 0 开始）：视为经过 i+1 个 tick
+   */
+  private getRemainingTicksForIndex(index: number): number {
+    if (!this.recording) return 0;
+    if (index < 0) return this.recording.totalTicks;
+    const elapsed = index + 1; // 第 0 帧已消耗 1 个 tick
+    return Math.max(0, this.recording.totalTicks - elapsed);
+  }
+
+  /**
    * Deserializes snake entities from serialized data
    */
   private deserializeSnakes(serializedSnakes: any[]): Snake[] {
@@ -598,14 +644,27 @@ export class GameReplayManager {
    * Gets the current frame index
    */
   getCurrentFrameIndex(): number {
-    return this.currentFrameIndex;
+    return this.atInitialState ? -1 : this.currentFrameIndex;
+  }
+
+  getPrevFrame(prev: number = 1): GameRecordingFrame | null {
+    if (!this.recording) return null;
+    if (this.currentFrameIndex < prev || this.currentFrameIndex >= this.recording.frames.length) {
+      return null;
+    }
+    return this.recording.frames[this.currentFrameIndex - prev];
   }
 
   /**
    * Gets the current frame
    */
   getCurrentFrame(): GameRecordingFrame | null {
-    if (!this.recording || this.currentFrameIndex < 0 || this.currentFrameIndex >= this.recording.frames.length) {
+    if (!this.recording) return null;
+    if (this.currentFrameIndex === -1 || this.atInitialState) {
+      // 初始状态返回 initialFrame（兼容旧数据）
+      return this.recording.initialFrame || this.recording.frames[0] || null;
+    }
+    if (this.currentFrameIndex < 0 || this.currentFrameIndex >= this.recording.frames.length) {
       return null;
     }
     return this.recording.frames[this.currentFrameIndex];

@@ -121,6 +121,7 @@ export interface GameRecording {
   timestamp: number;
   name: string;
   players: Player[];
+  initialFrame?: GameRecordingFrame;
   frames: GameRecordingFrame[];
   totalTicks: number;
   finalScores: {
