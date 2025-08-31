@@ -16,7 +16,7 @@
               {{ currentRecording?.name || "未知录制" }}
             </div>
             <div class="replay-progress">
-              帧 {{ currentFrame + 1 }} / {{ totalFrames }}
+              帧 {{ parseInt(currentFrame.toString()) + 1 }} / {{ totalFrames }}
             </div>
           </div>
 
