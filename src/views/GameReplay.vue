@@ -146,10 +146,30 @@
           >
             <p class="no-debug-data">当前帧无调试数据</p>
           </div>
-          <div class="debug-footer" v-if="(currentUserSnakeDebug.cpuTimeSeconds && currentUserSnakeDebug.memoryUsageKb) || currentUserSnakeDebug.workerNodeId || currentUserSnakeDebug.jobId">
-            <div v-if="currentUserSnakeDebug.cpuTimeSeconds && currentUserSnakeDebug.memoryUsageKb">{{ (currentUserSnakeDebug.cpuTimeSeconds * 1000).toFixed(2) }}ms / {{ (currentUserSnakeDebug.memoryUsageKb / 1024).toFixed(2) }}MB</div>
-            <div v-if="currentUserSnakeDebug.workerNodeId">Worker Node ID: {{ currentUserSnakeDebug.workerNodeId }}</div>
-            <div v-if="currentUserSnakeDebug.jobId">Job ID: {{ currentUserSnakeDebug.jobId }}</div>
+          <div
+            class="debug-footer"
+            v-if="
+              (currentUserSnakeDebug.cpuTimeSeconds &&
+                currentUserSnakeDebug.memoryUsageKb) ||
+              currentUserSnakeDebug.workerNodeId ||
+              currentUserSnakeDebug.jobId
+            "
+          >
+            <div
+              v-if="
+                currentUserSnakeDebug.cpuTimeSeconds &&
+                currentUserSnakeDebug.memoryUsageKb
+              "
+            >
+              {{ (currentUserSnakeDebug.cpuTimeSeconds * 1000).toFixed(2) }}ms /
+              {{ (currentUserSnakeDebug.memoryUsageKb / 1024).toFixed(2) }}MB
+            </div>
+            <div v-if="currentUserSnakeDebug.workerNodeId">
+              Worker Node ID: {{ currentUserSnakeDebug.workerNodeId }}
+            </div>
+            <div v-if="currentUserSnakeDebug.jobId">
+              Job ID: {{ currentUserSnakeDebug.jobId }}
+            </div>
           </div>
         </div>
       </div>
@@ -230,10 +250,7 @@ const loadRecording = async (recordingId: string) => {
       currentRecording.value = recording;
       replayManager.value.loadRecording(recording);
       totalFrames.value = recording.frames.length;
-      // 不主动设置 currentFrame，避免触发 watcher 跳到第 0 帧覆盖 initialFrame
-
-      // 初始化当前用户蛇的调试信息
-      updateCurrentUserSnakeDebug();
+      nextTick(updateCurrentUserSnakeDebug);
 
       console.log(`Loaded recording: ${recording.name}`);
     } else {
@@ -256,6 +273,7 @@ const play = () => {
     replayManager.value.play();
     isPlaying.value = true;
     isPaused.value = false;
+    nextTick(updateCurrentUserSnakeDebug);
   }
 };
 
@@ -263,6 +281,7 @@ const pause = () => {
   if (replayManager.value) {
     replayManager.value.pause();
     isPaused.value = true;
+    nextTick(updateCurrentUserSnakeDebug);
   }
 };
 
@@ -270,6 +289,7 @@ const resume = () => {
   if (replayManager.value) {
     replayManager.value.resume();
     isPaused.value = false;
+    nextTick(updateCurrentUserSnakeDebug);
   }
 };
 
@@ -281,6 +301,7 @@ const stop = () => {
     isPaused.value = false;
     currentFrame.value = replayManager.value.getCurrentFrameIndex();
     nextTick(() => {
+      updateCurrentUserSnakeDebug();
       suppressSeek.value = false;
     });
   }
@@ -290,7 +311,7 @@ const nextFrame = () => {
   if (replayManager.value) {
     replayManager.value.nextFrame();
     currentFrame.value = replayManager.value.getCurrentFrameIndex();
-    updateCurrentUserSnakeDebug();
+    nextTick(updateCurrentUserSnakeDebug);
   }
 };
 
@@ -298,14 +319,14 @@ const previousFrame = () => {
   if (replayManager.value) {
     replayManager.value.previousFrame();
     currentFrame.value = replayManager.value.getCurrentFrameIndex();
-    updateCurrentUserSnakeDebug();
+    nextTick(updateCurrentUserSnakeDebug);
   }
 };
 
 const seekToFrame = () => {
   if (replayManager.value) {
     replayManager.value.jumpToFrame(currentFrame.value);
-    updateCurrentUserSnakeDebug();
+    nextTick(updateCurrentUserSnakeDebug);
   }
 };
 
@@ -322,10 +343,14 @@ const returnToList = () => {
 
 const currentFrameInput = computed(() => {
   if (currentUserSnakeDebug.value.input) {
-    return (currentUserSnakeDebug.value.input.trim() + '\n' + (currentUserSnakeDebug.value.oldMemoryData ?? "")).trim();
+    return (
+      currentUserSnakeDebug.value.input.trim() +
+      "\n" +
+      (currentUserSnakeDebug.value.oldMemoryData ?? "")
+    ).trim();
   }
   return null;
-})
+});
 
 // 复制当前帧状态作为算法输入
 const copyCurrentFrameState = async () => {
@@ -334,13 +359,8 @@ const copyCurrentFrameState = async () => {
   if (currentFrameInput.value) {
     // 已经有输入数据，直接复制
     try {
-      await navigator.clipboard.writeText(
-        currentFrameInput.value
-      );
-      eventBus.emit(
-        GameEventType.UI_NOTIFICATION,
-        "已复制当前帧输入到剪贴板"
-      );
+      await navigator.clipboard.writeText(currentFrameInput.value);
+      eventBus.emit(GameEventType.UI_NOTIFICATION, "已复制当前帧输入到剪贴板");
     } catch (error) {
       console.error("Error copying to clipboard:", error);
       eventBus.emit(GameEventType.UI_NOTIFICATION, "复制失败，请手动复制");
@@ -416,6 +436,8 @@ const toggleDebugInfo = () => {
       y: 20,
     };
   }
+
+  nextTick(updateCurrentUserSnakeDebug);
 };
 
 // 更新当前用户蛇的调试信息
@@ -432,27 +454,27 @@ const updateCurrentUserSnakeDebug = () => {
     return;
   }
 
-  const currentUserId =
-    authState.user.id?.toString();
+  const currentUserId = authState.user.id?.toString();
   const currentUserUsername = authState.user.username;
 
   const isUserSname = (snake: any) => {
-      const snakeUserId = String(snake.metadata?.userId) || "";
-      const snakeStudentId = snake.metadata?.studentId || "";
-      const snakeUsername = snake.metadata?.username || "";
+    const snakeUserId = String(snake.metadata?.userId) || "";
+    const snakeStudentId = snake.metadata?.studentId || "";
+    const snakeUsername = snake.metadata?.username || "";
 
-      return (
-        snakeUserId === currentUserId ||
-        snakeStudentId === currentUserUsername ||
-        snakeUsername === currentUserUsername
-      );
-    }
+    return (
+      snakeUserId === currentUserId ||
+      snakeStudentId === currentUserUsername ||
+      snakeUsername === currentUserUsername
+    );
+  };
 
   // 查找当前用户的蛇
   const prevFrameUserSnake = prevFrame
     ? prevFrame.gameState.entities.snakes.find(isUserSname)
     : null;
-  const currentFrameUserSnake = currentFrame.gameState.entities.snakes.find(isUserSname);
+  const currentFrameUserSnake =
+    currentFrame.gameState.entities.snakes.find(isUserSname);
 
   if (currentFrameUserSnake) {
     currentUserSnakeExists.value = true;
@@ -470,7 +492,7 @@ const updateCurrentUserSnakeDebug = () => {
       workerNodeId: currentMeta.workerNodeId,
       jobId: currentMeta.jobId,
       cpuTimeSeconds: currentMeta.cpuTimeSeconds,
-      memoryUsageKb: currentMeta.memoryKb
+      memoryUsageKb: currentMeta.memoryKb,
     };
   } else {
     currentUserSnakeExists.value = false;
@@ -568,11 +590,14 @@ const cleanupReplay = () => {
 
 // 监听当前帧变化
 watch(currentFrame, (newFrame) => {
-  if (suppressSeek.value) return;
+  if (suppressSeek.value) {
+    nextTick(updateCurrentUserSnakeDebug);
+    return;
+  }
   if (replayManager.value && !isPlaying.value) {
     replayManager.value.jumpToFrame(newFrame);
+    nextTick(updateCurrentUserSnakeDebug);
   }
-  updateCurrentUserSnakeDebug();
 });
 
 onMounted(() => {
