@@ -30,7 +30,11 @@
         <!-- 已选择的蛇列表 -->
         <div class="selected-snakes-section" v-if="selectedUsers.length > 0">
           <div class="section-header">
-            <div class="section-title">已选择的蛇 ({{ selectedUsers.length }}/20)</div>
+            <div class="section-title">
+              已选择的蛇 ({{ selectedUsers.length }}/{{
+                GameConfig.MAX_PLAYERS
+              }})
+            </div>
             <button
               @click="clearSelectedSnakes"
               class="pixel-button clear-button"
@@ -45,7 +49,10 @@
               :key="user.userId"
               class="selected-snake-item"
             >
-              <div class="snake-color" :style="{ backgroundColor: getSnakeColor(user.userId) }"></div>
+              <div
+                class="snake-color"
+                :style="{ backgroundColor: getSnakeColor(user.userId) }"
+              ></div>
               <div class="snake-info">
                 <div class="snake-name">{{ user.nickname }}</div>
                 <div class="snake-id">{{ user.username }}</div>
@@ -79,7 +86,10 @@
               :class="{ 'snake-selected': isSelected(user.userId) }"
               @click="toggleUserSelection(user)"
             >
-              <div class="snake-color" :style="{ backgroundColor: getSnakeColor(user.userId) }"></div>
+              <div
+                class="snake-color"
+                :style="{ backgroundColor: getSnakeColor(user.userId) }"
+              ></div>
               <div class="snake-info">
                 <div class="snake-name">{{ user.nickname }}</div>
                 <div class="snake-id">{{ user.username }}</div>
@@ -88,7 +98,10 @@
                 </div>
               </div>
               <div class="select-checkbox">
-                <div class="checkbox-inner" v-if="isSelected(user.userId)"></div>
+                <div
+                  class="checkbox-inner"
+                  v-if="isSelected(user.userId)"
+                ></div>
               </div>
             </div>
           </div>
@@ -102,7 +115,7 @@
                 class="pixel-input"
                 v-model="randomSelectCount"
                 min="1"
-                max="20"
+                :max="GameConfig.MAX_PLAYERS"
                 placeholder="数量"
               />
               <button
@@ -137,16 +150,10 @@
 
       <!-- Game control buttons (shown after game over) -->
       <div v-if="isGameOver" class="game-control-buttons">
-        <button
-          @click="playAgain"
-          class="pixel-button play-again-button"
-        >
+        <button @click="playAgain" class="pixel-button play-again-button">
           再来一局
         </button>
-        <button
-          @click="returnToSelection"
-          class="pixel-button return-button"
-        >
+        <button @click="returnToSelection" class="pixel-button return-button">
           返回选择
         </button>
       </div>
@@ -171,6 +178,7 @@ import GameRankings from "../components/GameRankings.vue";
 import { sandboxService } from "../services/api";
 import { Player } from "../types/User";
 import { eventBus, GameEventType } from "../core/EventBus";
+import { GameConfig } from "../config/GameConfig";
 
 interface FinalScore {
   name: string;
@@ -227,7 +235,7 @@ const snakeColors = [
   "#f43f5e", // 粉色
   "#f97316", // 橙红色
   "#14b8a6", // 蓝绿色
-  "#6366f1"  // 靛蓝色
+  "#6366f1", // 靛蓝色
 ];
 
 const getSnakeColor = (userId: number) => {
@@ -237,11 +245,11 @@ const getSnakeColor = (userId: number) => {
 
 // 切换用户选择状态
 const toggleUserSelection = (user: Player) => {
-  const index = selectedUsers.value.findIndex(u => u.userId === user.userId);
+  const index = selectedUsers.value.findIndex((u) => u.userId === user.userId);
 
   if (index === -1) {
     // 如果还没满20个，则添加
-    if (selectedUsers.value.length < 20) {
+    if (selectedUsers.value.length < GameConfig.MAX_PLAYERS) {
       selectedUsers.value.push(user);
     }
   } else {
@@ -252,12 +260,12 @@ const toggleUserSelection = (user: Player) => {
 
 // 检查用户是否已选择
 const isSelected = (userId: number) => {
-  return selectedUsers.value.some(user => user.userId === userId);
+  return selectedUsers.value.some((user) => user.userId === userId);
 };
 
 // 移除已选择的蛇
 const removeSelectedSnake = (user: Player) => {
-  const index = selectedUsers.value.findIndex(u => u.userId === user.userId);
+  const index = selectedUsers.value.findIndex((u) => u.userId === user.userId);
   if (index !== -1) {
     selectedUsers.value.splice(index, 1);
   }
@@ -272,11 +280,11 @@ const clearSelectedSnakes = () => {
 const selectRandomSnakes = () => {
   // 获取未选择的用户
   const unselectedUsers = availableUsers.value.filter(
-    user => !isSelected(user.userId)
+    (user) => !isSelected(user.userId)
   );
 
   // 计算可以选择的数量（考虑已选择的和最大限制）
-  const remainingSlots = 20 - selectedUsers.value.length;
+  const remainingSlots = GameConfig.MAX_PLAYERS - selectedUsers.value.length;
   const availableToSelect = Math.min(
     randomSelectCount.value,
     unselectedUsers.length,
@@ -292,7 +300,7 @@ const selectRandomSnakes = () => {
   const randomUsers = shuffled.slice(0, availableToSelect);
 
   // 添加到选择列表
-  randomUsers.forEach(user => {
+  randomUsers.forEach((user) => {
     selectedUsers.value.push(user);
   });
 };
@@ -304,8 +312,8 @@ const selectByUsernames = () => {
   // 解析用户名（支持空格、逗号、分号分隔）
   const usernameList = batchUsernames.value
     .split(/[,;\s]+/)
-    .map(name => name.trim())
-    .filter(name => name.length > 0);
+    .map((name) => name.trim())
+    .filter((name) => name.length > 0);
 
   if (usernameList.length === 0) return;
 
@@ -313,13 +321,17 @@ const selectByUsernames = () => {
   let added = 0;
   const notFound: string[] = [];
 
-  usernameList.forEach(username => {
+  usernameList.forEach((username) => {
     // 查找匹配的用户
     const user = availableUsers.value.find(
-      u => u.username.toLowerCase() === username.toLowerCase()
+      (u) => u.username.toLowerCase() === username.toLowerCase()
     );
 
-    if (user && !isSelected(user.userId) && selectedUsers.value.length < 20) {
+    if (
+      user &&
+      !isSelected(user.userId) &&
+      selectedUsers.value.length < GameConfig.MAX_PLAYERS
+    ) {
       selectedUsers.value.push(user);
       added++;
     } else if (!user) {
@@ -339,7 +351,7 @@ const selectByUsernames = () => {
 
 // 格式化最后更新时间
 const formatLastUpdate = (lastUpdate: string) => {
-  if (!lastUpdate) return '';
+  if (!lastUpdate) return "";
 
   try {
     const date = new Date(lastUpdate);
@@ -348,17 +360,17 @@ const formatLastUpdate = (lastUpdate: string) => {
     const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 
     if (diffDays === 0) {
-      return '今天更新';
+      return "今天更新";
     } else if (diffDays === 1) {
-      return '昨天更新';
+      return "昨天更新";
     } else if (diffDays < 7) {
       return `${diffDays}天前更新`;
     } else {
       return `${date.getMonth() + 1}月${date.getDate()}日更新`;
     }
   } catch (e) {
-    console.error('Error formatting date:', e);
-    return '最近更新';
+    console.error("Error formatting date:", e);
+    return "最近更新";
   }
 };
 
@@ -385,7 +397,11 @@ const playAgain = () => {
   isGameOver.value = false;
 
   // 重新启动游戏，使用相同的蛇
-  console.log(`再次开始游戏，使用相同的 ${selectedUsers.value.length} 个玩家，录制功能: ${enableRecording.value ? '启用' : '禁用'}`);
+  console.log(
+    `再次开始游戏，使用相同的 ${selectedUsers.value.length} 个玩家，录制功能: ${
+      enableRecording.value ? "启用" : "禁用"
+    }`
+  );
 
   // 确保游戏状态为已开始
   gameStarted.value = true;
@@ -415,8 +431,8 @@ const playAgain = () => {
         originalDispose();
       };
 
-      window.addEventListener('beforeunload', () => {
-         gameManager.value?.dispose();
+      window.addEventListener("beforeunload", () => {
+        gameManager.value?.dispose();
       });
     }
   }, 0);
@@ -427,7 +443,11 @@ const startGameWithSelectedUsers = () => {
   if (selectedUsers.value.length === 0) return;
 
   // 准备开始游戏
-  console.log(`开始游戏，选中了 ${selectedUsers.value.length} 个玩家，录制功能: ${enableRecording.value ? '启用' : '禁用'}`);
+  console.log(
+    `开始游戏，选中了 ${selectedUsers.value.length} 个玩家，录制功能: ${
+      enableRecording.value ? "启用" : "禁用"
+    }`
+  );
 
   // 先清理之前的游戏资源（如果有）
   cleanupGame();
@@ -460,8 +480,8 @@ const startGameWithSelectedUsers = () => {
         originalDispose();
       };
 
-      window.addEventListener('beforeunload', () => {
-         gameManager.value?.dispose();
+      window.addEventListener("beforeunload", () => {
+        gameManager.value?.dispose();
       });
     }
   }, 0);
@@ -511,9 +531,9 @@ const setupBeforeUnloadListener = () => {
     cleanupGame();
   };
 
-  window.addEventListener('beforeunload', handleBeforeUnload);
+  window.addEventListener("beforeunload", handleBeforeUnload);
   return () => {
-    window.removeEventListener('beforeunload', handleBeforeUnload);
+    window.removeEventListener("beforeunload", handleBeforeUnload);
   };
 };
 
@@ -586,7 +606,8 @@ onMounted(() => {
   max-height: calc(100vh - 300px);
 }
 
-.loading-message, .error-message {
+.loading-message,
+.error-message {
   color: var(--text-color);
   font-size: 14px;
   text-align: center;
@@ -609,8 +630,12 @@ onMounted(() => {
 }
 
 @keyframes pixel-spin {
-  0% { transform: rotate(0deg); }
-  100% { transform: rotate(360deg); }
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
 }
 
 .snake-options {
@@ -805,8 +830,6 @@ onMounted(() => {
   align-items: center;
 }
 
-
-
 .start-button {
   font-size: 14px;
   padding: 10px 20px;
@@ -818,7 +841,7 @@ onMounted(() => {
   border: none;
   padding: 10px 16px;
   cursor: pointer;
-  font-family: 'Press Start 2P', monospace;
+  font-family: "Press Start 2P", monospace;
   font-size: 12px;
   text-transform: uppercase;
   box-shadow: 0 4px 0 rgba(0, 0, 0, 0.3);
@@ -934,7 +957,8 @@ onMounted(() => {
     gap: 20px;
   }
 
-  .game-ui-left, .game-ui-right {
+  .game-ui-left,
+  .game-ui-right {
     flex: 0 0 auto;
     width: 100%;
     max-width: 600px;
@@ -955,7 +979,8 @@ onMounted(() => {
 }
 
 @media (max-width: 768px) {
-  .game-ui-left, .game-ui-right {
+  .game-ui-left,
+  .game-ui-right {
     max-width: 100%;
   }
 

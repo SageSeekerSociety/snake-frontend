@@ -9,7 +9,6 @@ import {
   APIDecisionStrategy,
   PlayerDecisionStrategy,
 } from "../strategies/SnakeDecisionStrategies";
-import { simpleAIAlgorithm, greedyAIAlgorithm } from "../ai/SnakeAI";
 import { GameState } from "../types/GameState";
 import { ParameterizedAIDecisionStrategy } from "../strategies/ChasingDecisionStrategy";
 import { advancedAIAlgorithm } from "../ai/AdvancedSnakeAI";
@@ -52,10 +51,35 @@ export class EntityFactory {
     // First color is reserved for the primary/player snake
     const snakeColors = [
       GameConfig.COLORS.PLAYER,
-      '#e6194B', '#3cb44b', '#4363d8', '#f58231', '#911eb4', '#46f0f0',
-      '#f032e6', '#bcf60c', '#fabebe', '#008080', '#e6beff', '#9A6324',
-      '#fffac8', '#800000', '#aaffc3', '#808000', '#ffd8b1', '#000075',
-      '#808080', '#ffe119', '#469990', '#dcbeff', '#a9a9a9'
+      "#e6194B",
+      "#3cb44b",
+      "#4363d8",
+      "#f58231",
+      "#911eb4",
+      "#46f0f0",
+      "#f032e6",
+      "#bcf60c",
+      "#fabebe",
+      "#008080",
+      "#e6beff",
+      "#9A6324",
+      "#fffac8",
+      "#800000",
+      "#aaffc3",
+      "#808000",
+      "#ffd8b1",
+      "#000075",
+      "#808080",
+      "#ffe119",
+      "#469990",
+      "#dcbeff",
+      "#a9a9a9",
+      "#66c2a5",
+      "#ff7f00",
+      "#6a3d9a",
+      "#b15928",
+      "#17becf",
+      "#8da0cb",
     ];
 
     if (!selectedUsers || selectedUsers.length === 0) {
@@ -68,14 +92,14 @@ export class EntityFactory {
       const angle = index * angleStep;
       const colorIndex = index % snakeColors.length;
       const snake = this.createApiControlledSnake(
-          radius,
-          angle,
-          snakeColors[colorIndex],
-          clock,
-          coordinator,
-          gameSessionId,
-          user,
-        );
+        radius,
+        angle,
+        snakeColors[colorIndex],
+        clock,
+        coordinator,
+        gameSessionId,
+        user
+      );
       // 为本局分配从1开始的编号，存入元数据
       snake.setMetadata({ matchNumber: index + 1 });
       snakes.push(snake);
@@ -94,7 +118,7 @@ export class EntityFactory {
     clock: GameClock,
     coordinator: DecisionRequestCoordinator,
     gameSessionId: string,
-    userData?: Player,
+    userData?: Player
   ): Snake {
     const { x, y } = this.calculatePosition(radius, angle);
     const direction = this.getInitialDirection(x, y);

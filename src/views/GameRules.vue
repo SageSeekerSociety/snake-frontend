@@ -369,6 +369,7 @@ y_key1 x_key1 holder_id1 remaining_time1
               <li><code>3</code>：向下移动</li>
               <li><code>4</code>：激活护盾 (在原地停留一回合)</li>
             </ul>
+            <p><strong>注意：不支持原地180度掉头</strong></p>
 
             <h2>四、持久化存储 (Memory 系统)</h2>
             <p>为了支持需要跨回合记忆状态的复杂算法，平台提供了一个持久化存储（Memory）系统。每个算法实例在单局游戏中都拥有一块独立的、可读写的数据空间。</p>
