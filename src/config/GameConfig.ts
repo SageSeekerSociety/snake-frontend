@@ -23,7 +23,7 @@ export interface Vec2 { x: number; y: number; }
 export const GameConfig = {
   TOTAL_TICKS: 256,
 
-  MAX_PLAYERS: 30,
+  MAX_PLAYERS: 20,
 
   CANVAS: {
     BOX_SIZE: 20,
