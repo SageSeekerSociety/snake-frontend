@@ -1,3 +1,4 @@
+import { Key } from "../entities/Key";
 import { Snake } from "../entities/Snake";
 import { Position } from "../types/Position";
 
@@ -21,6 +22,8 @@ export interface IEntityQuery {
    * Checks if a specific position is occupied by certain entity types
    */
   isPositionOccupied(position: Position, typesToCheck: string[]): boolean;
+
+  getAllKeys(): Key[];
 }
 
 /**

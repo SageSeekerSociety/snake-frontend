@@ -19,9 +19,12 @@ import { VortexFieldManager } from "./VortexFieldManager";
 import { TreasureSystem } from "./TreasureSystem";
 import { SafeZoneManager } from "./SafeZoneManager";
 import { gameRecordingService } from "../services/gameRecordingService";
-import { v4 as uuidv4 } from 'uuid';
+import { v4 as uuidv4 } from "uuid";
 import { Obstacle } from "../entities/Obstacle";
-import { createSnakePlaceholder, getSnakeDisplayName } from "../utils/snakeDisplayUtils";
+import {
+  createSnakePlaceholder,
+  getSnakeDisplayName,
+} from "../utils/snakeDisplayUtils";
 
 /**
  * Orchestrates the overall game flow, managing different subsystems.
@@ -62,19 +65,19 @@ export class GameManager {
     this.canvasManager = new CanvasManager(canvas);
     this.spatialGrid = new SpatialHashGrid(GameConfig.CANVAS.BOX_SIZE * 2); // Example cell size
     this.entityFactory = new EntityFactory();
-    
+
     // Initialize vortex field manager first
     this.vortexFieldManager = new VortexFieldManager();
-    
+
     this.entityManager = new EntityManager(
       this.spatialGrid,
       this.entityFactory,
       this.vortexFieldManager
     );
-    
+
     // Set EntityManager reference in VortexFieldManager after EntityManager is created
     this.vortexFieldManager.setEntityQuery(this.entityManager);
-    
+
     this.safeZoneManager = new SafeZoneManager();
     this.foodGenerator = new FoodGenerator(
       this.entityManager,
@@ -86,11 +89,14 @@ export class GameManager {
     this.gameClock = new GameClock(GameConfig.TOTAL_TICKS); // Get total ticks from config
     this.inputHandler = new InputHandler(canvas);
     this.decisionCoordinator = new DecisionRequestCoordinator();
-    this.treasureSystem = new TreasureSystem(this.entityManager, this.safeZoneManager);
+    this.treasureSystem = new TreasureSystem(
+      this.entityManager,
+      this.safeZoneManager
+    );
 
     // Initialize recording service if enabled
     if (this.recordingEnabled) {
-      gameRecordingService.initialize().catch(error => {
+      gameRecordingService.initialize().catch((error) => {
         console.error("Failed to initialize game recording service:", error);
         this.recordingEnabled = false;
       });
@@ -109,9 +115,17 @@ export class GameManager {
   private boundStartGame!: () => void;
   private boundHandleGameOver!: () => void;
   private boundCheckGameOverCondition!: (snake: Snake) => void;
-  private boundHandleTreasureSpawned!: (data: { treasure: TreasureChest, keys: Key[] }) => void;
-  private boundHandleTreasureReplaced!: (data: { oldTreasure?: TreasureChest, oldKeys?: Key[], treasure: TreasureChest, keys: Key[] }) => void;
-  private boundHandleKeyDropped!: (data: { key: Key, snake: Snake }) => void;
+  private boundHandleTreasureSpawned!: (data: {
+    treasure: TreasureChest;
+    keys: Key[];
+  }) => void;
+  private boundHandleTreasureReplaced!: (data: {
+    oldTreasure?: TreasureChest;
+    oldKeys?: Key[];
+    treasure: TreasureChest;
+    keys: Key[];
+  }) => void;
+  private boundHandleKeyDropped!: (data: { key: Key; snake: Snake }) => void;
   private boundHandleKeyRemoved!: (data: { key: Key }) => void;
 
   /**
@@ -126,7 +140,7 @@ export class GameManager {
     this.boundHandleTreasureReplaced = this.handleTreasureReplaced.bind(this);
     this.boundHandleKeyDropped = this.handleKeyDropped.bind(this);
     this.boundHandleKeyRemoved = this.handleKeyRemoved.bind(this);
-    
+
     eventBus.on(GameEventType.GAME_START_REQUESTED, this.boundStartGame);
     eventBus.on(GameEventType.GAME_OVER, this.boundHandleGameOver);
     // Listen for cleanup completion to check game over condition again
@@ -134,10 +148,16 @@ export class GameManager {
       GameEventType.SNAKE_DEATH_ANIMATION_COMPLETE,
       this.boundCheckGameOverCondition
     );
-    
+
     // Treasure system event handlers
-    eventBus.on(GameEventType.TREASURE_SPAWNED, this.boundHandleTreasureSpawned);
-    eventBus.on(GameEventType.TREASURE_REPLACED, this.boundHandleTreasureReplaced);
+    eventBus.on(
+      GameEventType.TREASURE_SPAWNED,
+      this.boundHandleTreasureSpawned
+    );
+    eventBus.on(
+      GameEventType.TREASURE_REPLACED,
+      this.boundHandleTreasureReplaced
+    );
     eventBus.on(GameEventType.KEY_DROPPED, this.boundHandleKeyDropped);
     eventBus.on(GameEventType.KEY_REMOVED, this.boundHandleKeyRemoved);
   }
@@ -240,13 +260,13 @@ export class GameManager {
     try {
       // 组装完整的初始游戏状态（第0帧）
       const initialGameState = this.assembleGameStateForRecording();
-      
+
       // Initial treasure data is handled by treasure system internally
 
       gameRecordingService.startRecording(
         this.selectedUsers,
         this.gameClock.getTotalTicks(),
-        initialGameState,
+        initialGameState
       );
       this.isRecording = true;
     } catch (error) {
@@ -262,11 +282,11 @@ export class GameManager {
     const entityState = this.entityManager.getEntityState();
     const vortexFieldData = this.vortexFieldManager.getApiData();
     const currentTick = this.gameClock.getCurrentTick();
-    
+
     return {
       entities: entityState,
       vortexField: vortexFieldData,
-      safeZone: this.safeZoneManager.getAlgorithmInfo(currentTick)
+      safeZone: this.safeZoneManager.getAlgorithmInfo(currentTick),
     };
   }
 
@@ -277,11 +297,11 @@ export class GameManager {
     const entityState = this.entityManager.getEntityState();
     const vortexFieldData = this.vortexFieldManager.getApiData();
     const currentTick = this.gameClock.getCurrentTick();
-    
+
     return {
       entities: entityState,
       vortexField: vortexFieldData,
-      safeZone: this.safeZoneManager.serialize(currentTick)
+      safeZone: this.safeZoneManager.serialize(currentTick),
     };
   }
 
@@ -328,7 +348,9 @@ export class GameManager {
     this.applyVortexPull();
 
     // 6. Phase 2 Collision Detection - only for snakes not dying
-    liveSnakes = this.entityManager.getLiveSnakes().filter(snake => !snake.isDyingAnimation());
+    liveSnakes = this.entityManager
+      .getLiveSnakes()
+      .filter((snake) => !snake.isDyingAnimation());
     allSnakes = this.entityManager.getAllSnakes();
     const phase2CollisionResults = this.collisionDetector.detectCollisions(
       liveSnakes,
@@ -369,11 +391,11 @@ export class GameManager {
     try {
       // Assemble complete game state
       const gameState = this.assembleGameStateForRecording();
-      
+
       console.log(`Recording frame at tick ${tick}`);
 
       gameRecordingService.recordFrame(
-        tick, 
+        tick,
         gameState,
         this.safeZoneManager.serialize(this.gameClock.getCurrentTick())
       );
@@ -386,19 +408,28 @@ export class GameManager {
    * Checks if any snakes are outside the safe zone and kills them
    */
   private checkSafeZoneViolations(): void {
-    const liveSnakes = this.entityManager.getLiveSnakes().filter(snake => !snake.isDyingAnimation());
-    
+    const liveSnakes = this.entityManager
+      .getLiveSnakes()
+      .filter((snake) => !snake.isDyingAnimation());
+
     for (const snake of liveSnakes) {
       const headPosition = snake.getBody()[0];
-      
+
       if (!this.safeZoneManager.isPositionSafe(headPosition)) {
         // Allow snake to remain outside the safe zone while shield is active
         if (snake.isShieldActive()) {
           continue;
         }
 
-        const snakeName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
-        console.log(`[SafeZone] ${snakeName} violated safe zone at (${Math.floor(headPosition.x / 20)}, ${Math.floor(headPosition.y / 20)})`);
+        const snakeName = getSnakeDisplayName(
+          snake,
+          this.entityManager.getAllSnakes()
+        );
+        console.log(
+          `[SafeZone] ${snakeName} violated safe zone at (${Math.floor(
+            headPosition.x / 20
+          )}, ${Math.floor(headPosition.y / 20)})`
+        );
         // Handle treasure drop and delegate death handling to EntityManager
         this.treasureSystem.handleSnakeDeath(snake);
         this.entityManager.killSnake(snake, "left the safe zone");
@@ -411,17 +442,25 @@ export class GameManager {
    */
   private applyVortexPull(): void {
     // Only apply vortex pull to snakes that are alive and not in death animation
-    const liveSnakes = this.entityManager.getLiveSnakes().filter(snake => !snake.isDyingAnimation());
-    
+    const liveSnakes = this.entityManager
+      .getLiveSnakes()
+      .filter((snake) => !snake.isDyingAnimation());
+
     for (const snake of liveSnakes) {
       const headPosition = snake.getBody()[0];
-      const pullVector = this.vortexFieldManager.calculateVortexPull(headPosition);
-      
+      const pullVector =
+        this.vortexFieldManager.calculateVortexPull(headPosition);
+
       if (pullVector) {
         // Apply vortex pull movement
         this.applyVortexPullToSnake(snake, pullVector);
-        const displayName = getSnakeDisplayName(snake, this.entityManager.getAllSnakes());
-        console.log(`[VortexField] Pulled ${displayName} ${pullVector.direction}`);
+        const displayName = getSnakeDisplayName(
+          snake,
+          this.entityManager.getAllSnakes()
+        );
+        console.log(
+          `[VortexField] Pulled ${displayName} ${pullVector.direction}`
+        );
       }
     }
   }
@@ -433,7 +472,7 @@ export class GameManager {
     const currentBody = [...snake.getBody()];
     const head = currentBody[0];
     const boxSize = GameConfig.CANVAS.BOX_SIZE;
-    
+
     // Calculate new head position based on pull direction
     let newHead: Position;
     switch (pullVector.direction) {
@@ -452,17 +491,17 @@ export class GameManager {
       default:
         return; // Invalid direction
     }
-    
+
     // Create new body with pulled head
     const newBody = [newHead, ...currentBody];
-    
+
     // Remove tail (no growth from vortex pull)
     newBody.pop();
-    
+
     // Update snake's body through reflection (accessing private property)
     // This is needed because Snake doesn't expose a direct method to set body
     (snake as any).body = newBody;
-    
+
     // Update spatial grid for the moved segments
     // This would need to be handled by EntityManager, but for now we'll let
     // the next regular movement update handle it
@@ -476,7 +515,11 @@ export class GameManager {
     // For fatal collisions, start death animation immediately (but keep snake alive during animation)
     // For non-fatal collisions (food, key, treasure), handle immediately
     for (const result of results) {
-      if (result.type === "food" || result.type === "key" || result.type === "treasure_chest") {
+      if (
+        result.type === "food" ||
+        result.type === "key" ||
+        result.type === "treasure_chest"
+      ) {
         // Handle non-fatal collisions immediately - no delay needed
         this.handleSingleCollision(result);
       } else {
@@ -486,7 +529,6 @@ export class GameManager {
       }
     }
   }
-
 
   /**
    * Handles a fatal collision by delegating to EntityManager
@@ -498,7 +540,7 @@ export class GameManager {
     }
 
     let deathReason = "";
-    
+
     switch (result.type) {
       case "wall":
         deathReason = "hit wall";
@@ -512,7 +554,8 @@ export class GameManager {
       case "snake":
         if (result.collidedWith instanceof Snake) {
           const collidedSnake = result.collidedWith as Snake;
-          const collidedSnakePlaceholder = createSnakePlaceholder(collidedSnake);
+          const collidedSnakePlaceholder =
+            createSnakePlaceholder(collidedSnake);
 
           // Check for head-to-head collision
           const isHeadCollision =
@@ -523,13 +566,15 @@ export class GameManager {
             // Handle shield logic for head-to-head collisions
             const snakeHasShield = result.snake.isShieldActive();
             const collidedSnakeHasShield = collidedSnake.isShieldActive();
-            
+
             if (snakeHasShield && collidedSnakeHasShield) {
               // Both have shields, no death
               return;
             } else if (snakeHasShield && !collidedSnakeHasShield) {
               // Only result.snake has shield, kill the other snake
-              const currentSnakePlaceholder = createSnakePlaceholder(result.snake);
+              const currentSnakePlaceholder = createSnakePlaceholder(
+                result.snake
+              );
               const otherReason = `hit by shielded ${currentSnakePlaceholder}`;
               // Handle treasure drop before killing
               this.treasureSystem.handleSnakeDeath(collidedSnake);
@@ -541,7 +586,9 @@ export class GameManager {
             } else {
               // Neither has shields, both die
               deathReason = `hit ${collidedSnakePlaceholder}`;
-              const currentSnakePlaceholder = createSnakePlaceholder(result.snake);
+              const currentSnakePlaceholder = createSnakePlaceholder(
+                result.snake
+              );
               const otherReason = `hit ${currentSnakePlaceholder}`;
               // Handle treasure drop for both snakes
               this.treasureSystem.handleSnakeDeath(collidedSnake);
@@ -563,7 +610,6 @@ export class GameManager {
     this.entityManager.killSnake(result.snake, deathReason);
   }
 
-
   /**
    * Handles a single collision (food, key, treasure)
    */
@@ -575,8 +621,7 @@ export class GameManager {
         .getAllFoodItems()
         .find(
           (f) =>
-            f.getPosition().x === foodPos.x &&
-            f.getPosition().y === foodPos.y
+            f.getPosition().x === foodPos.x && f.getPosition().y === foodPos.y
         );
       if (eatenFood) {
         this.entityManager.handleFoodEaten(result.snake, eatenFood);
@@ -588,8 +633,7 @@ export class GameManager {
         .getAllKeys()
         .find(
           (k) =>
-            k.getPosition().x === keyPos.x &&
-            k.getPosition().y === keyPos.y
+            k.getPosition().x === keyPos.x && k.getPosition().y === keyPos.y
         );
       if (key && this.treasureSystem.handleKeyPickup(result.snake, key)) {
         this.entityManager.removeKey(key);
@@ -604,7 +648,10 @@ export class GameManager {
             t.getPosition().x === treasurePos.x &&
             t.getPosition().y === treasurePos.y
         );
-      if (treasure && this.treasureSystem.handleTreasureOpening(result.snake, treasure)) {
+      if (
+        treasure &&
+        this.treasureSystem.handleTreasureOpening(result.snake, treasure)
+      ) {
         // Treasure was successfully opened - remove it immediately to prevent double collision
         this.entityManager.removeTreasureChest(treasure);
       }
@@ -733,22 +780,22 @@ export class GameManager {
         ticksRemaining: status.ticksRemaining,
         center: null,
         innerRadius: 0,
-        outerRadius: 0
+        outerRadius: 0,
       };
     }
 
     const geometry = status.geometry;
     const boxSize = GameConfig.CANVAS.BOX_SIZE;
-    
+
     return {
       status: status.state,
       ticksRemaining: status.ticksRemaining,
       center: {
         x: geometry.centerAnchor.x / boxSize,
-        y: geometry.centerAnchor.y / boxSize
+        y: geometry.centerAnchor.y / boxSize,
       },
       innerRadius: geometry.innerRingRadius, // These are already in grid units!
-      outerRadius: geometry.outerRingRadius  // These are already in grid units!
+      outerRadius: geometry.outerRingRadius, // These are already in grid units!
     };
   }
 
@@ -773,15 +820,22 @@ export class GameManager {
       ...this.entityManager.getAllSnakes(),
       // Obstacles are pre-rendered, but could be included if dynamic
     ];
-    
+
     // Get current vortex field state for rendering
     const vortexStatus = this.vortexFieldManager.getStatus();
     const vortexState = this.createVortexRenderState(vortexStatus);
-    
+
     // Get current safe zone state for rendering
-    const safeZoneStatus = this.safeZoneManager.getStatus(this.gameClock.getCurrentTick());
-    
-    this.canvasManager.render(renderables, vortexState, timestamp, safeZoneStatus); // Pass both states
+    const safeZoneStatus = this.safeZoneManager.getStatus(
+      this.gameClock.getCurrentTick()
+    );
+
+    this.canvasManager.render(
+      renderables,
+      vortexState,
+      timestamp,
+      safeZoneStatus
+    ); // Pass both states
 
     // Display appropriate overlays
     if (!this.gameRunning && this.gameInitialized) {
@@ -796,36 +850,46 @@ export class GameManager {
   private lastRenderTime: number = 0; // Helper for renderLoop deltaTime
 
   // --- Treasure System Event Handlers ---
-  
+
   /**
    * Handles treasure and keys being spawned by the treasure system
    */
-  private handleTreasureSpawned(data: { treasure: TreasureChest, keys: Key[] }): void {
+  private handleTreasureSpawned(data: {
+    treasure: TreasureChest;
+    keys: Key[];
+  }): void {
     // Add treasure to entity manager
     if (data.treasure) {
       this.entityManager.addTreasureChest(data.treasure);
     }
-    
+
     // Add keys to entity manager
     if (data.keys && Array.isArray(data.keys)) {
-      data.keys.forEach(key => {
+      data.keys.forEach((key) => {
         this.entityManager.addKey(key);
       });
     }
-    
-    console.log(`[GameManager] Added treasure and ${data.keys?.length || 0} keys to game`);
+
+    console.log(
+      `[GameManager] Added treasure and ${data.keys?.length || 0} keys to game`
+    );
   }
 
   /**
    * Handles replacing an existing treasure and its keys with a new set
    */
-  private handleTreasureReplaced(data: { oldTreasure?: TreasureChest, oldKeys?: Key[], treasure: TreasureChest, keys: Key[] }): void {
+  private handleTreasureReplaced(data: {
+    oldTreasure?: TreasureChest;
+    oldKeys?: Key[];
+    treasure: TreasureChest;
+    keys: Key[];
+  }): void {
     // Remove old entities if provided
     if (data.oldTreasure) {
       this.entityManager.removeTreasureChest(data.oldTreasure);
     }
     if (data.oldKeys && Array.isArray(data.oldKeys)) {
-      data.oldKeys.forEach(k => this.entityManager.removeKey(k));
+      data.oldKeys.forEach((k) => this.entityManager.removeKey(k));
     }
 
     // Add new ones
@@ -833,19 +897,27 @@ export class GameManager {
       this.entityManager.addTreasureChest(data.treasure);
     }
     if (data.keys && Array.isArray(data.keys)) {
-      data.keys.forEach(k => this.entityManager.addKey(k));
+      data.keys.forEach((k) => this.entityManager.addKey(k));
     }
 
-    console.log(`[GameManager] Replaced treasure and keys (added ${data.keys?.length || 0} keys)`);
+    console.log(
+      `[GameManager] Replaced treasure and keys (added ${
+        data.keys?.length || 0
+      } keys)`
+    );
   }
 
   /**
    * Handles a key being dropped (either by timeout or death)
    */
-  private handleKeyDropped(data: { key: Key, snake: Snake }): void {
+  private handleKeyDropped(data: { key: Key; snake: Snake }): void {
     if (data.key) {
       this.entityManager.addKey(data.key);
-      console.log(`[GameManager] Key dropped by ${data.snake?.getMetadata()?.name || 'unknown snake'}`);
+      console.log(
+        `[GameManager] Key dropped by ${
+          data.snake?.getMetadata()?.name || "unknown snake"
+        }`
+      );
     }
   }
 
@@ -887,9 +959,12 @@ export class GameManager {
       GameEventType.SNAKE_DEATH_ANIMATION_COMPLETE,
       this.boundCheckGameOverCondition
     );
-    
+
     // Treasure system event cleanup
-    eventBus.off(GameEventType.TREASURE_SPAWNED, this.boundHandleTreasureSpawned);
+    eventBus.off(
+      GameEventType.TREASURE_SPAWNED,
+      this.boundHandleTreasureSpawned
+    );
     eventBus.off(GameEventType.KEY_DROPPED, this.boundHandleKeyDropped);
     eventBus.off(GameEventType.KEY_REMOVED, this.boundHandleKeyRemoved);
 

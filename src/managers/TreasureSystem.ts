@@ -44,7 +44,7 @@ export interface TreasureSystemConfig {
   topKChestCandidates?: number;
 
   /** 第二窗口替换的可达性判定参数 */
-  replacementTimeHorizon?: number;   // 未来若干tick视窗（仅用于启发）
+  replacementTimeHorizon?: number; // 未来若干tick视窗（仅用于启发）
   replacementPathTicksLimit?: number; // 认为“可达”的最大路径时间（格数）
 
   /** 死亡掉落搜索半径（找最近可放格） */
@@ -69,9 +69,9 @@ export class TreasureSystem {
   private entityQuery: IEntityQuery;
   private safeZoneManager: SafeZoneManager;
   private currentTreasure: TreasureChest | null = null;
-  private currentKeys: Key[] = [];
   private treasureSpawnCount: number = 0;
   private pseudoRandomState: PseudoRandomState | null = null;
+  private keysFrozenThisTick = false;
 
   constructor(
     entityQuery: IEntityQuery,
@@ -100,8 +100,7 @@ export class TreasureSystem {
       keyHoldTimeLimit:
         config?.keyHoldTimeLimit ??
         GameConfig.TREASURE_SYSTEM.KEY_HOLD_TIME_LIMIT,
-      minTreasureDistanceFromEdge:
-        config?.minTreasureDistanceFromEdge ?? 5,
+      minTreasureDistanceFromEdge: config?.minTreasureDistanceFromEdge ?? 5,
       minDistanceFromSnakeHead:
         config?.minDistanceFromSnakeHead ??
         GameConfig.TREASURE_SYSTEM.MIN_DISTANCE_FROM_SNAKE_HEAD,
@@ -136,6 +135,7 @@ export class TreasureSystem {
 
   update(currentTick: number): void {
     if (!this.config.enabled) return;
+    this.keysFrozenThisTick = false;
 
     this.updatePseudoRandomState(currentTick);
     if (this.shouldSpawnTreasure(currentTick)) {
@@ -144,6 +144,10 @@ export class TreasureSystem {
     }
 
     this.updateKeyHoldTimes();
+  }
+
+  get currentKeys(): Key[] {
+    return this.entityQuery.getAllKeys();
   }
 
   private updatePseudoRandomState(currentTick: number): void {
@@ -220,31 +224,31 @@ export class TreasureSystem {
 
       if (isSecondWindow && this.shouldReplaceForSecondWindow(liveSnakes)) {
         const keyCount = this.calculateKeyCount(liveSnakes.length);
-        const replacement = this.tryGenerateTreasureAndKeys(liveSnakes, keyCount);
-        if (replacement) {
-          const { position, score, keys } = replacement;
-          const newTreasure = new TreasureChest(
-            position,
-            GameConfig.CANVAS.BOX_SIZE,
-            score
-          );
-          const oldTreasure = this.currentTreasure;
-          const oldKeys = [...this.currentKeys];
+        const replacement = this.tryGenerateTreasureAndKeys(
+          liveSnakes,
+          keyCount
+        );
+        if (!replacement) return;
+        const { position, score, keys } = replacement;
+        const newTreasure = new TreasureChest(
+          position,
+          GameConfig.CANVAS.BOX_SIZE,
+          score
+        );
+        const oldTreasure = this.currentTreasure;
+        this.keysFrozenThisTick = true;
+        this.clearAllKeys();
 
-          this.currentTreasure = newTreasure;
-          this.currentKeys = keys;
-          this.treasureSpawnCount++;
+        this.currentTreasure = newTreasure;
+        this.treasureSpawnCount++;
 
-          eventBus.emit(GameEventType.TREASURE_REPLACED, {
-            oldTreasure,
-            oldKeys,
-            treasure: newTreasure,
-            keys,
-          });
-          return;
-        } else {
-          return; // 无法生成更好方案则保持现状
-        }
+        eventBus.emit(GameEventType.TREASURE_REPLACED, {
+          oldTreasure,
+          oldKeys: [],
+          treasure: newTreasure,
+          keys,
+        });
+        return;
       } else {
         return; // 不满足替换条件则不做任何事（继续等待）
       }
@@ -257,7 +261,12 @@ export class TreasureSystem {
       console.warn("Failed to find position for treasure.");
       return;
     }
-    console.log("Spawning treasure at", treasurePosition, "with score", treasureScore);
+    console.log(
+      "Spawning treasure at",
+      treasurePosition,
+      "with score",
+      treasureScore
+    );
 
     this.currentTreasure = new TreasureChest(
       treasurePosition,
@@ -267,21 +276,19 @@ export class TreasureSystem {
     this.treasureSpawnCount++;
 
     const keyCount = this.calculateKeyCount(liveSnakes.length);
-    this.currentKeys = this.spawnKeys(keyCount, treasurePosition, liveSnakes);
+    const keys = this.spawnKeys(keyCount, treasurePosition, liveSnakes);
 
     eventBus.emit(GameEventType.TREASURE_SPAWNED, {
       treasure: this.currentTreasure,
-      keys: this.currentKeys,
+      keys: keys,
     });
 
-    const snakePlaceholder = "Someone";
     eventBus.emit(
       GameEventType.UI_NOTIFICATION,
       `💎 Treasure spawned! Worth ${treasureScore} points.`
     );
   }
 
-  /** 第二窗口替换的“有效不可达”判定：所有钥匙要么不安全，要么在时间限制内无蛇可达 */
   private shouldReplaceForSecondWindow(liveSnakes: Snake[]): boolean {
     if (!this.currentKeys || this.currentKeys.length === 0) return false;
 
@@ -334,7 +341,7 @@ export class TreasureSystem {
     const averageNonFirstScore =
       nonFirstPlaceSnakes.length > 0
         ? nonFirstPlaceSnakes.reduce((sum, s) => sum + s.getScore(), 0) /
-        nonFirstPlaceSnakes.length
+          nonFirstPlaceSnakes.length
         : firstPlaceScore;
 
     const calculatedScore =
@@ -357,7 +364,6 @@ export class TreasureSystem {
     );
   }
 
-  /** ========= 改进点 #1：宝箱位置打分选优 ========= */
   private findTreasurePositionScored(liveSnakes: Snake[]): Position | null {
     const safeZone = this.safeZoneManager.getCurrentBounds();
     const box = GameConfig.CANVAS.BOX_SIZE;
@@ -385,7 +391,7 @@ export class TreasureSystem {
           x - safeZone.xMin,
           safeZone.xMax - x,
           y - safeZone.yMin,
-          safeZone.yMax - y,
+          safeZone.yMax - y
         );
         if (distEdge < this.config.minTreasureDistanceFromEdge) {
           console.log("Skip position near edge:", x, y, "distEdge:", distEdge);
@@ -402,9 +408,7 @@ export class TreasureSystem {
           !this.isPositionOccupied(pos)
         ) {
           // 评分项：
-          const headCells = liveSnakes.map((s) =>
-            this.toCell(s.getBody()[0])
-          );
+          const headCells = liveSnakes.map((s) => this.toCell(s.getBody()[0]));
           const toHeads = headCells.map((cell) =>
             this.getDistanceCells({ x, y }, cell, mode)
           );
@@ -412,10 +416,10 @@ export class TreasureSystem {
           const dLeader =
             leader != null
               ? this.getDistanceCells(
-                { x, y },
-                this.toCell(leader.getBody()[0]),
-                mode
-              )
+                  { x, y },
+                  this.toCell(leader.getBody()[0]),
+                  mode
+                )
               : 0;
           const dCenter = Math.abs(x - centerX) + Math.abs(y - centerY);
 
@@ -438,8 +442,6 @@ export class TreasureSystem {
     return picked.pos;
   }
 
-  /** ========= 改进点 #2：钥匙公平性（基于匹配） + #3 距离接口 ========= */
-
   private spawnKeys(
     keyCount: number,
     treasurePosition: Position,
@@ -458,7 +460,11 @@ export class TreasureSystem {
     treasurePosition: Position,
     liveSnakes: Snake[]
   ): Position[] {
-    for (let attempt = 0; attempt < this.config.maxFairnessAttempts; attempt++) {
+    for (
+      let attempt = 0;
+      attempt < this.config.maxFairnessAttempts;
+      attempt++
+    ) {
       const positions = this.selectKeyPositions(
         keyCount,
         treasurePosition,
@@ -476,10 +482,7 @@ export class TreasureSystem {
     treasurePosition: Position,
     liveSnakes: Snake[]
   ): Position[] {
-    const candidates = this.getValidKeyCandidates(
-      treasurePosition,
-      liveSnakes
-    );
+    const candidates = this.getValidKeyCandidates(treasurePosition, liveSnakes);
     const shuffled = this.shuffleArray(candidates);
     const selected: Position[] = [];
 
@@ -530,14 +533,16 @@ export class TreasureSystem {
     }
 
     return (
-      snakes.every(
-        (s) => this.gridManhattan(pos, s.getBody()[0]) >= 5
-      ) && !this.isPositionOccupied(pos) // 包含 treasure/key
+      snakes.every((s) => this.gridManhattan(pos, s.getBody()[0]) >= 5) &&
+      !this.isPositionOccupied(pos) // 包含 treasure/key
     );
   }
 
   /** 使用匹配来评估“每条蛇都有不同钥匙可抢且距离差不过分大” */
-  private isFairByMatching(keyPositions: Position[], liveSnakes: Snake[]): boolean {
+  private isFairByMatching(
+    keyPositions: Position[],
+    liveSnakes: Snake[]
+  ): boolean {
     if (liveSnakes.length === 0 || keyPositions.length === 0) return true;
 
     const mode = this.autoDistanceMode(this.config.distanceModeFairness!);
@@ -627,7 +632,6 @@ export class TreasureSystem {
     return { snakeOfKey, matchedCount: matched };
   }
 
-  /** ========= 改进点 #4：二次替换可达性检测 ========= */
   private hasAnySnakeSafePathWithin(
     targetPos: Position,
     snakes: Snake[],
@@ -641,24 +645,31 @@ export class TreasureSystem {
     });
   }
 
-  /** ========= 改进点 #5：死亡掉落安全化（邻域→BFS半径） ========= */
   handleSnakeDeath(snake: Snake): void {
-    if (snake.hasKey()) {
-      const droppedKeyId = snake.dropKey();
-      if (droppedKeyId) {
-        const headPos = snake.getBody()[0];
-        const dropPos =
-          this.findAdjacentDropPosition(snake) ??
-          this.findNearestFreeDropPosition(headPos, this.config.maxDropSearchRadius!);
-        const finalPos = dropPos ?? headPos; // 实在找不到就原地
-        const droppedKey = new Key(
-          finalPos,
-          GameConfig.CANVAS.BOX_SIZE,
-          droppedKeyId
-        );
-        eventBus.emit(GameEventType.KEY_DROPPED, { key: droppedKey, snake });
-      }
+    if (!snake.hasKey()) return;
+    const droppedKeyId = snake.dropKey();
+    if (!droppedKeyId) return;
+    if (
+      this.keysFrozenThisTick ||
+      !this.currentTreasure ||
+      this.currentTreasure.isOpened()
+    ) {
+      return;
     }
+    const headPos = snake.getBody()[0];
+    const dropPos =
+      this.findAdjacentDropPosition(snake) ??
+      this.findNearestFreeDropPosition(
+        headPos,
+        this.config.maxDropSearchRadius!
+      );
+    const finalPos = dropPos ?? headPos; // 实在找不到就原地
+    const droppedKey = new Key(
+      finalPos,
+      GameConfig.CANVAS.BOX_SIZE,
+      droppedKeyId
+    );
+    eventBus.emit(GameEventType.KEY_DROPPED, { key: droppedKey, snake });
   }
 
   private findNearestFreeDropPosition(
@@ -733,17 +744,28 @@ export class TreasureSystem {
 
   private handleKeyTimeout(snake: Snake): void {
     const droppedKeyId = snake.dropKey();
-    if (droppedKeyId) {
-      const dropPosition = this.findAdjacentDropPosition(snake)
-        ?? this.findNearestFreeDropPosition(snake.getBody()[0], this.config.maxDropSearchRadius!);
-      if (dropPosition) {
-        const droppedKey = new Key(
-          dropPosition,
-          GameConfig.CANVAS.BOX_SIZE,
-          droppedKeyId
-        );
-        eventBus.emit(GameEventType.KEY_DROPPED, { key: droppedKey, snake });
-      }
+    if (!droppedKeyId) return;
+    if (
+      this.keysFrozenThisTick ||
+      !this.currentTreasure ||
+      this.currentTreasure.isOpened()
+    ) {
+      return;
+    }
+
+    const dropPosition =
+      this.findAdjacentDropPosition(snake) ??
+      this.findNearestFreeDropPosition(
+        snake.getBody()[0],
+        this.config.maxDropSearchRadius!
+      );
+    if (dropPosition) {
+      const droppedKey = new Key(
+        dropPosition,
+        GameConfig.CANVAS.BOX_SIZE,
+        droppedKeyId
+      );
+      eventBus.emit(GameEventType.KEY_DROPPED, { key: droppedKey, snake });
     }
   }
 
@@ -778,19 +800,34 @@ export class TreasureSystem {
     switch (direction) {
       case Direction.UP:
       case Direction.DOWN:
-        return [{ x: -1, y: 0 }, { x: 1, y: 0 }];
+        return [
+          { x: -1, y: 0 },
+          { x: 1, y: 0 },
+        ];
       case Direction.LEFT:
       case Direction.RIGHT:
-        return [{ x: 0, y: -1 }, { x: 0, y: 1 }];
+        return [
+          { x: 0, y: -1 },
+          { x: 0, y: 1 },
+        ];
       default:
-        return [{ x: -1, y: 0 }, { x: 1, y: 0 }];
+        return [
+          { x: -1, y: 0 },
+          { x: 1, y: 0 },
+        ];
     }
   }
 
   handleTreasureOpening(snake: Snake, treasure: TreasureChest): boolean {
-    if (!snake.hasKey() || treasure.isOpened() || treasure !== this.currentTreasure) {
+    if (
+      !snake.hasKey() ||
+      treasure.isOpened() ||
+      treasure !== this.currentTreasure
+    ) {
       return false;
     }
+
+    this.keysFrozenThisTick = true;
 
     treasure.open();
     snake.addScore(treasure.getScore());
@@ -820,7 +857,6 @@ export class TreasureSystem {
 
     try {
       snake.holdKey(key.getId());
-      this.currentKeys = this.currentKeys.filter((k) => k.getId() !== key.getId());
       eventBus.emit(GameEventType.KEY_PICKED_UP, { snake, key });
       return true;
     } catch (error) {
@@ -837,10 +873,10 @@ export class TreasureSystem {
       }
     });
 
-    this.currentKeys.forEach((key) => {
-      eventBus.emit(GameEventType.KEY_REMOVED, { key });
-    });
-    this.currentKeys = [];
+    const groundKeys = this.entityQuery.getAllKeys();
+    for (const k of groundKeys) {
+      eventBus.emit(GameEventType.KEY_REMOVED, { key: k });
+    }
   }
 
   private isPositionOccupied(position: Position): boolean {
@@ -852,8 +888,6 @@ export class TreasureSystem {
       "key",
     ]);
   }
-
-  /** ========= 距离相关工具 ========= */
 
   private toCell(p: Position): { x: number; y: number } {
     const box = GameConfig.CANVAS.BOX_SIZE;
@@ -868,7 +902,10 @@ export class TreasureSystem {
   private autoDistanceMode(pref: DistanceMode): DistanceMode {
     // 若 entityQuery 提供最短路能力则启用，否则回退
     const anyEQ: any = this.entityQuery;
-    if (pref === DistanceMode.SHORTEST_PATH && typeof anyEQ?.getShortestPathDistance === "function") {
+    if (
+      pref === DistanceMode.SHORTEST_PATH &&
+      typeof anyEQ?.getShortestPathDistance === "function"
+    ) {
       return DistanceMode.SHORTEST_PATH;
     }
     return DistanceMode.MANHATTAN;
@@ -916,10 +953,6 @@ export class TreasureSystem {
     return this.currentTreasure;
   }
 
-  getCurrentKeys(): Key[] {
-    return [...this.currentKeys];
-  }
-
   isEnabled(): boolean {
     return this.config.enabled;
   }
@@ -930,9 +963,9 @@ export class TreasureSystem {
 
   reset(): void {
     this.currentTreasure = null;
-    this.currentKeys = [];
     this.treasureSpawnCount = 0;
     this.pseudoRandomState = null;
+    this.keysFrozenThisTick = false;
   }
 
   dispose(): void {
