@@ -6,6 +6,19 @@
         <div class="pixel-snake"></div>
       </div>
 
+      <!-- 截止时间与倒计时提示 -->
+      <div class="deadline-banner pixel-border" :class="{ passed: isPastDeadline }">
+        <template v-if="!isPastDeadline">
+          <span class="deadline-text">提交截止倒计时：</span>
+          <span class="deadline-timer">{{ countdownText }}</span>
+          <span class="deadline-note">（截止时间：{{ DEADLINE_LABEL }}）</span>
+        </template>
+        <template v-else>
+          <span class="deadline-text">提交已截止</span>
+          <span class="deadline-note">（截止时间：{{ DEADLINE_LABEL }}）</span>
+        </template>
+      </div>
+
       <div class="submit-content">
         <div v-if="!isCompilingUI && !hasResult" class="upload-section">
           <label for="codeFile" class="file-label pixel-border"
@@ -37,8 +50,8 @@
 
           <div class="submit-actions">
             <button @click="handleSubmit" class="pixel-button"
-              :disabled="isUploading || !selectedFile || rateLimitCountdown > 0">
-              {{ isUploading ? '上传中...' : rateLimitCountdown > 0 ? `等待${rateLimitCountdown}秒` : '提交代码' }}
+              :disabled="isUploading || !selectedFile || rateLimitCountdown > 0 || isPastDeadline">
+              {{ isPastDeadline ? '已截止' : (isUploading ? '上传中...' : rateLimitCountdown > 0 ? `等待${rateLimitCountdown}秒` : '提交代码') }}
             </button>
           </div>
 
@@ -46,6 +59,7 @@
           <div v-if="error" :class="['error-message', { 'rate-limit-error': rateLimitCountdown > 0 }]">
             {{ rateLimitCountdown > 0 ? `请求频率过高，请${rateLimitCountdown}秒后重试` : error }}
           </div>
+          <div v-if="isPastDeadline" class="deadline-hint">已超过截止时间，禁止提交。</div>
         </div>
 
         <!-- 编译/结果区域：在上传完成后或 SUBMITTED 后进入显示（统一使用状态条样式） -->
@@ -102,11 +116,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onUnmounted, computed, nextTick } from 'vue';
+import { ref, onUnmounted, onMounted, computed, nextTick } from 'vue';
 import { sandboxService } from '../services/sandboxService';
 import { useAuth } from '../stores/auth';
 import { SSE } from 'sse.js';
 import { RateLimitError } from '../types/RateLimitError';
+import { DEADLINE_TS, DEADLINE_LABEL, getRemainingMs, isPastDeadline as pastDeadlineFn, formatCountdown } from '../utils/deadline';
 
 const { state } = useAuth();
 
@@ -124,6 +139,12 @@ const statusText = ref<string | null>(null);
 const jobId = ref<string | null>(null);
 const rateLimitCountdown = ref<number>(0);
 const rateLimitTimer = ref<number | null>(null);
+
+// 截止时间与倒计时
+const nowMs = ref<number>(Date.now());
+const isPastDeadline = computed(() => pastDeadlineFn(nowMs.value));
+const countdownText = computed(() => formatCountdown(getRemainingMs(nowMs.value)));
+let deadlineTimer: number | null = null;
 
 const statusBarClass = computed(() => {
   if (hasResult.value && compilationStatus.value) {
@@ -361,6 +382,11 @@ const handleSubmit = async () => {
     return;
   }
 
+  if (isPastDeadline.value) {
+    error.value = '已超过截止时间，无法提交';
+    return;
+  }
+
   // 重置状态
   closeSSEConnection();
   isUploading.value = true;
@@ -429,9 +455,21 @@ const formatDate = (timestamp: number): string => {
 };
 
 // 组件卸载时清理SSE连接和定时器
+onMounted(() => {
+  // 倒计时更新
+  if (deadlineTimer) clearInterval(deadlineTimer);
+  deadlineTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000) as unknown as number;
+});
+
 onUnmounted(() => {
   closeSSEConnection();
   clearRateLimitTimer();
+  if (deadlineTimer) {
+    clearInterval(deadlineTimer);
+    deadlineTimer = null;
+  }
 });
 </script>
 
@@ -449,6 +487,37 @@ onUnmounted(() => {
   padding: 30px;
   max-height: calc(100vh - 80px);
   overflow-y: auto;
+}
+
+/* 截止时间提示条 */
+.deadline-banner {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+  background: var(--input-bg);
+  border: 2px solid var(--border-color);
+}
+.deadline-banner.passed {
+  border-color: var(--error-color);
+  background: rgba(239, 68, 68, 0.08);
+}
+.deadline-text {
+  font-weight: 600;
+  color: var(--text-color);
+}
+.deadline-timer {
+  font-family: monospace;
+  color: var(--accent-color);
+}
+.deadline-note {
+  color: var(--border-color);
+  font-size: 12px;
+}
+.deadline-hint {
+  text-align: center;
+  color: var(--error-color);
 }
 
 /* 自定义滚动条样式 */

@@ -20,6 +20,14 @@
         <router-link to="/submit" class="menu-button">
           <div class="pixel-icon code-icon"></div>
           <span>提交算法</span>
+          <span
+            v-if="!isPastDeadline"
+            class="menu-countdown-badge"
+            :class="{ soon: isSoon && !isUrgent, urgent: isUrgent }"
+          >
+            剩余 {{ countdownText }}
+          </span>
+          <span v-else class="menu-countdown-badge ended">已截止</span>
         </router-link>
 
         <router-link to="/tournament" class="menu-button tournament-button">
@@ -42,12 +50,36 @@
 </template>
 
 <script setup lang="ts">
-import { computed } from 'vue';
+import { computed, ref, onMounted, onUnmounted } from 'vue';
 import { useAuth } from '../stores/auth';
+import { getRemainingMs, isPastDeadline as pastDeadlineFn, formatCountdown } from '../utils/deadline';
 
 const { state } = useAuth();
 
 const nickname = computed(() => state.user?.nickname || '玩家');
+
+// 截止倒计时（首页展示）
+const nowMs = ref<number>(Date.now());
+const isPastDeadline = computed(() => pastDeadlineFn(nowMs.value));
+const remainingMs = computed(() => getRemainingMs(nowMs.value));
+const countdownText = computed(() => formatCountdown(remainingMs.value));
+const isUrgent = computed(() => remainingMs.value > 0 && remainingMs.value <= 60 * 60 * 1000); // < 1h
+const isSoon = computed(() => remainingMs.value > 0 && remainingMs.value <= 24 * 60 * 60 * 1000); // < 24h
+let deadlineTimer: number | null = null;
+
+onMounted(() => {
+  if (deadlineTimer) clearInterval(deadlineTimer);
+  deadlineTimer = setInterval(() => {
+    nowMs.value = Date.now();
+  }, 1000) as unknown as number;
+});
+
+onUnmounted(() => {
+  if (deadlineTimer) {
+    clearInterval(deadlineTimer);
+    deadlineTimer = null;
+  }
+});
 </script>
 
 <style scoped>
@@ -123,6 +155,39 @@ const nickname = computed(() => state.user?.nickname || '玩家');
   transition: all 0.2s;
   cursor: pointer;
   font-family: 'Press Start 2P', monospace;
+}
+
+/* 提交截止倒计时徽标 */
+.menu-countdown-badge {
+  margin-left: auto;
+  padding: 4px 6px;
+  border: 2px solid var(--accent-color);
+  color: var(--accent-color);
+  background: rgba(74, 222, 128, 0.12);
+  font-size: 12px;
+  line-height: 1;
+  border-radius: 4px;
+  font-family: 'Press Start 2P', monospace;
+}
+.menu-countdown-badge.soon {
+  border-color: #ffc107;
+  color: #ffc107;
+  background: rgba(255, 193, 7, 0.12);
+}
+.menu-countdown-badge.urgent {
+  border-color: var(--error-color);
+  color: var(--error-color);
+  background: rgba(239, 68, 68, 0.12);
+  animation: subtlePulse 1.4s ease-in-out infinite;
+}
+.menu-countdown-badge.ended {
+  border-color: var(--error-color);
+  color: var(--error-color);
+  background: rgba(239, 68, 68, 0.12);
+}
+@keyframes subtlePulse {
+  0%, 100% { transform: translateY(0); filter: brightness(1); }
+  50% { transform: translateY(-1px); filter: brightness(1.1); }
 }
 
 .menu-button:hover {
