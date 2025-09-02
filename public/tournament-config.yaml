@@ -1,0 +1,89 @@
+# 蛇王争霸赛 2025年赛制配置
+tournament:
+  name: "2025第九届蛇王争霸赛"
+  date: "2025-09-03"
+  time: "14:00"
+
+stages:
+  group_stage:
+    name: "小组赛"
+    description: "所有参赛选手随机分为10个小组，每组20人"
+    start_time: "14:00"
+    end_time: "15:20"
+    groups:
+      count: 10
+      size: 20
+    rounds: 2
+    scoring:
+      type: "rank_based"
+      top_n: 8
+      points: [8, 7, 6, 5, 4, 3, 2, 1]  # 前8名得分
+    outcomes:
+      advance_to_finals:
+        ranks: [1, 2]  # 每组前2名直接晋级决赛
+        destination: "finals"
+      advance_to_playoffs:
+        ranks: [3]  # 每组第3名进入附加赛
+        destination: "playoffs"
+      award_merit:
+        ranks: [4, 5, 6]  # 第4-6名获得优胜奖
+        award: "优胜奖"
+    tiebreaker:
+      - "total_score"  # 优先比较总积分
+      - "highest_raw_score"  # 其次比较最高原始得分
+      - "playoff_required"  # 仍相同则需要加赛
+
+  playoffs:
+    name: "附加赛"
+    description: "小组赛各组第3名组成新的小组进行比赛"
+    start_time: "15:20"
+    end_time: "15:30"
+    participants_from: "group_stage.advance_to_playoffs"
+    rounds: 2
+    scoring:
+      type: "rank_based"
+      top_n: 10  # 所有选手都有排名
+      points: [10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+    outcomes:
+      award_third:
+        ranks: [1, 2, 3, 4]  # 前4名获得三等奖
+        award: "三等奖"
+      award_merit:
+        ranks: [5, 6, 7, 8, 9, 10]  # 其余选手获得优胜奖
+        award: "优胜奖"
+    tiebreaker:
+      - "total_score"
+      - "highest_raw_score"
+      - "playoff_required"
+
+  finals:
+    name: "决赛"
+    description: "小组赛各组前2名合并为一组进行比赛"
+    start_time: "15:30"
+    end_time: "16:00"
+    participants_from: "group_stage.advance_to_finals"
+    rounds: 3
+    scoring:
+      type: "rank_based"
+      top_n: 20  # 所有选手都有排名
+      points: [20, 19, 18, 17, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1]
+    outcomes:
+      award_first:
+        ranks: [1, 2, 3, 4]  # 前4名获得一等奖
+        award: "一等奖"
+      award_second:
+        ranks: [5, 6, 7, 8, 9, 10, 11, 12]  # 第5-12名获得二等奖
+        award: "二等奖"
+      award_third:
+        ranks: [13, 14, 15, 16, 17, 18, 19, 20]  # 第13-20名获得三等奖
+        award: "三等奖"
+    tiebreaker:
+      - "total_score"
+      - "highest_raw_score"
+      - "playoff_required"
+
+# 比赛显示配置
+display:
+  show_participant_list_before_match: true
+  show_realtime_scores: false  # 不显示实时分数，只在结束后显示
+  announcement_duration: 5  # 公告显示时长（秒）

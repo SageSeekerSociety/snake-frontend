@@ -180,6 +180,17 @@ import { Player } from "../types/User";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { GameConfig } from "../config/GameConfig";
 
+// 组件props
+const props = defineProps<{
+  tournamentMode?: boolean;
+  selectedUsers?: Player[];
+}>();
+
+// 组件emits
+const emit = defineEmits<{
+  'game-ended': [scores: FinalScore[]];
+}>();
+
 interface FinalScore {
   name: string;
   username: string;
@@ -491,7 +502,25 @@ const startGameWithSelectedUsers = () => {
 const handleFinalScores = (scores: FinalScore[]) => {
   console.log("Received final scores:", scores);
   finalScores.value = scores;
-  showFinalRankings.value = true;
+  
+  // 如果是赛事模式，向父组件发送结果并且不显示排名弹窗
+  if (props.tournamentMode) {
+    emit('game-ended', scores);
+    
+    // // 赛事模式下向localStorage报告结果
+    // const matchResult = {
+    //   status: 'completed',
+    //   scores: scores.map(s => ({
+    //     username: s.username,
+    //     nickname: s.name,
+    //     rawScore: s.score
+    //   }))
+    // };
+    // localStorage.setItem('tournament_match_result', JSON.stringify(matchResult));
+  } else {
+    // 普通模式显示排名弹窗
+    showFinalRankings.value = true;
+  }
 };
 
 // 关闭最终排名弹窗
@@ -538,16 +567,61 @@ const setupBeforeUnloadListener = () => {
 };
 
 onMounted(() => {
-  fetchSubmitters();
-  const removeGameOverListener = setupGameOverListener();
-  const removeBeforeUnloadListener = setupBeforeUnloadListener();
+  // 赛事模式下的初始化逻辑
+  if (props.tournamentMode) {
+    // 赛事模式：监听比赛指令并自动开始游戏
+    const handleTournamentCommand = (event: StorageEvent) => {
+      if (event.key === 'tournament_match_command' && event.newValue) {
+        try {
+          const command = JSON.parse(event.newValue);
+          if (command.action === 'START_MATCH' && command.players) {
+            console.log('收到赛事比赛指令:', command);
+            
+            // 设置选中的用户
+            selectedUsers.value = command.players.map((p: any) => ({
+              userId: p.userId,
+              username: p.username,
+              nickname: p.nickname
+            }));
+            
+            // 自动开始游戏
+            startGameWithSelectedUsers();
+          }
+        } catch (error) {
+          console.error('解析赛事指令失败:', error);
+        }
+      }
+    };
 
-  // 返回清理函数
-  onUnmounted(() => {
-    cleanupGame();
-    removeGameOverListener();
-    removeBeforeUnloadListener();
-  });
+    window.addEventListener('storage', handleTournamentCommand);
+    
+    // 如果直接提供了selectedUsers，立即开始游戏
+    if (props.selectedUsers && props.selectedUsers.length > 0) {
+      selectedUsers.value = [...props.selectedUsers];
+      setTimeout(() => {
+        startGameWithSelectedUsers();
+      }, 100);
+    }
+
+    const removeGameOverListener = setupGameOverListener();
+
+    onUnmounted(() => {
+      cleanupGame();
+      removeGameOverListener();
+      window.removeEventListener('storage', handleTournamentCommand);
+    });
+  } else {
+    // 普通模式：加载用户列表
+    fetchSubmitters();
+    const removeGameOverListener = setupGameOverListener();
+    const removeBeforeUnloadListener = setupBeforeUnloadListener();
+
+    onUnmounted(() => {
+      cleanupGame();
+      removeGameOverListener();
+      removeBeforeUnloadListener();
+    });
+  }
 });
 </script>
 

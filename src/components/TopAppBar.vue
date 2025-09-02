@@ -68,7 +68,7 @@ const avatarId = computed(() => state.user?.avatarId || 0);
 // 根据路由判断是否显示顶部导航栏
 const shouldShowAppBar = computed(() => {
   // 登录、注册等页面不显示顶部导航栏
-  const hiddenRoutes = ['/login', '/register', '/oauth-callback'];
+  const hiddenRoutes = ['/login', '/register', '/oauth-callback', '/tournament/display'];
   return !hiddenRoutes.includes(route.path);
 });
 
@@ -85,14 +85,14 @@ const defaultAvatarId = ref(1); // 默认值为1
 
 // 获取默认头像ID
 const fetchDefaultAvatarId = async () => {
-  try {
-    const response = await avatarService.getDefaultAvatarId();
-    if (response.data && response.data.avatarId) {
-      defaultAvatarId.value = response.data.avatarId;
-    }
-  } catch (err) {
-    console.error('获取默认头像ID失败:', err);
-  }
+  // try {
+  //   const response = await avatarService.getDefaultAvatarId();
+  //   if (response.data && response.data.avatarId) {
+  //     defaultAvatarId.value = response.data.avatarId;
+  //   }
+  // } catch (err) {
+  //   console.error('获取默认头像ID失败:', err);
+  // }
 };
 
 // 获取头像URL

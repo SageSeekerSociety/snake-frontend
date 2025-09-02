@@ -62,6 +62,18 @@ const routes: Array<RouteRecordRaw> = [
     meta: { requiresAuth: true }
   },
   {
+    path: '/tournament',
+    name: 'Tournament',
+    component: () => import('../views/Tournament.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
+    path: '/tournament/display',
+    name: 'TournamentDisplay',
+    component: () => import('../views/TournamentDisplay.vue'),
+    meta: { requiresAuth: true }
+  },
+  {
     path: '/:pathMatch(.*)*',
     name: 'NotFound',
     component: () => import('../views/NotFound.vue')

@@ -22,6 +22,11 @@
           <span>提交算法</span>
         </router-link>
 
+        <router-link to="/tournament" class="menu-button tournament-button">
+          <div class="pixel-icon tournament-icon"></div>
+          <span>赛事管理</span>
+        </router-link>
+
         <router-link to="/recordings" class="menu-button">
           <div class="pixel-icon battle-icon"></div>
           <span>查看回放</span>
@@ -143,6 +148,24 @@ const nickname = computed(() => state.user?.nickname || '玩家');
   border-radius: 4px;
 }
 
+.menu-button.tournament-button {
+  background-color: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+  position: relative;
+}
+
+.menu-button.tournament-button:hover {
+  border-color: #ffc107;
+}
+
+.menu-button.tournament-button::after {
+  content: '🏆';
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  font-size: 14px;
+}
+
 .pixel-icon {
   width: 24px;
   height: 24px;
@@ -171,6 +194,18 @@ const nickname = computed(() => state.user?.nickname || '玩家');
   background-color: var(--accent-color);
   clip-path: polygon(
     15% 8%, 85% 50%, 15% 92%
+  );
+}
+
+/* 赛事管理 - 抽象奖杯形状 */
+.tournament-icon {
+  background-color: #ffc107;
+  clip-path: polygon(
+    25% 8%, 75% 8%, 85% 15%, 85% 30%, 
+    75% 35%, 75% 75%, 85% 85%, 
+    85% 92%, 15% 92%, 15% 85%, 
+    25% 75%, 25% 35%, 15% 30%, 
+    15% 15%
   );
 }
 
