@@ -14,7 +14,7 @@
             <th>排名</th>
             <th>选手</th>
             <th>总积分</th>
-            <th>最高分</th>
+            <th>总得分</th>
             <th v-for="round in roundCount" :key="`round-${round}`">
               第{{ round }}轮
             </th>
@@ -107,11 +107,8 @@
       </div>
 
       <div class="export-actions">
-        <button @click="exportToCSV" class="pixel-button export-csv-button">
-          导出CSV
-        </button>
-        <button @click="exportToText" class="pixel-button export-text-button">
-          导出文本
+        <button @click="exportToExcel" class="pixel-button export-excel-button">
+          导出表格
         </button>
       </div>
     </div>
@@ -174,90 +171,21 @@ const getRankClass = (rank: number) => {
   return "normal";
 };
 
-// 导出CSV
-const exportToCSV = () => {
-  let csv = "Ranking,Username,Nickname,TotalPoints,HighestScore";
-
-  // 添加轮次标题
-  for (let round = 1; round <= roundCount.value; round++) {
-    csv += `,Round${round}_Points,Round${round}_Rank,Round${round}_RawScore`;
-  }
-  csv += ",Status,Award,Advanced\n";
-
-  // 添加数据行
-  props.standings.forEach((standing) => {
-    const participant = getParticipant(standing.participantId);
-    let row = `${standing.rank},"${participant?.username}","${participant?.nickname}",${standing.totalPoints},${standing.totalRawScore}`;
-
-    // 添加各轮数据
-    for (let round = 1; round <= roundCount.value; round++) {
-      const result = getRoundResult(standing, round);
-      if (result) {
-        row += `,${result.roundPoints},${result.rank},${result.rawScore}`;
-      } else {
-        row += `,-,-,-`;
-      }
-    }
-
-    // 添加状态信息
-    row += `,"${standing.needsPlayoff ? "Playoff" : "Normal"}","${
-      standing.award || ""
-    }","${standing.isAdvanced ? standing.advancedTo || "Yes" : "No"}"`;
-    csv += row + "\n";
-  });
-
-  // 下载文件
-  const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "积分榜.csv";
-  a.click();
-  URL.revokeObjectURL(url);
-};
-
-// 导出文本
-const exportToText = () => {
-  let content = "详细积分榜\n";
-  content += "=".repeat(50) + "\n\n";
-
-  props.standings.forEach((standing, index) => {
-    const participant = getParticipant(standing.participantId);
-    content += `${standing.rank}. ${participant?.username} (${participant?.nickname})\n`;
-    content += `   总积分: ${standing.totalPoints}   最高分: ${standing.totalRawScore}\n`;
-
-    // 各轮详情
-    for (let round = 1; round <= roundCount.value; round++) {
-      const result = getRoundResult(standing, round);
-      if (result) {
-        content += `   第${round}轮: ${result.roundPoints}分 (第${result.rank}名, 原始分${result.rawScore})\n`;
-      } else {
-        content += `   第${round}轮: 未参赛\n`;
-      }
-    }
-
-    // 状态信息
-    if (standing.isAdvanced) {
-      content += `   ✓ 晋级${standing.advancedTo}\n`;
-    }
-    if (standing.award) {
-      content += `   🏆 获得${standing.award}\n`;
-    }
-    if (standing.needsPlayoff) {
-      content += `   ⚠️ 需要加赛\n`;
-    }
-
-    content += "\n";
-  });
-
-  // 下载文件
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = "详细积分榜.txt";
-  a.click();
-  URL.revokeObjectURL(url);
+// 导出为Excel表格
+const exportToExcel = () => {
+  import("../../services/excelExportService")
+    .then(({ ExcelExportService }) => {
+      ExcelExportService.exportStandingsTable(
+        props.standings,
+        props.participants,
+        props.matches,
+        "积分榜"
+      );
+    })
+    .catch((error) => {
+      console.error("Excel导出失败:", error);
+      alert("导出失败，请重试");
+    });
 };
 </script>
 
@@ -535,13 +463,8 @@ const exportToText = () => {
   box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
 }
 
-.export-csv-button {
+.export-excel-button {
   background-color: rgba(34, 197, 94, 0.8);
-  color: white;
-}
-
-.export-text-button {
-  background-color: rgba(168, 85, 247, 0.8);
   color: white;
 }
 

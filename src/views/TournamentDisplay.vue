@@ -14,92 +14,156 @@
         </div>
       </div>
 
-      <!-- 主要内容区 -->
-      <div class="waiting-main">
-        <!-- 左侧：当前阶段信息和参赛选手 -->
-        <div class="left-sidebar">
-          <div class="stage-info">
-            <h2>当前阶段</h2>
-            <div class="stage-card">
-              <div class="stage-name">{{ getCurrentStageInfo().name }}</div>
-              <div class="stage-status">{{ getCurrentStageInfo().status }}</div>
-              <div class="stage-progress">
-                <div class="progress-text">
-                  {{ getCurrentStageInfo().progress }}
-                </div>
-              </div>
-              <!-- 等待状态动画 -->
-              <div
-                v-if="displayState === 'waiting'"
-                class="waiting-indicator-inline"
-              >
-                <div class="loading-animation">
-                  <div class="dot"></div>
-                  <div class="dot"></div>
-                  <div class="dot"></div>
-                </div>
-              </div>
+      <!-- 如果赛事已完成，展示终极结果页 -->
+      <div v-if="tournament?.status === 'completed'" class="finale-container">
+        <div class="finale-header">
+          <h2 class="finale-title">比赛圆满结束</h2>
+          <div class="finale-subtitle">最终排名与获奖情况</div>
+        </div>
+
+        <!-- 领奖台：显示决赛前三名 -->
+        <div class="results-podium">
+          <div v-if="finalsResults.length >= 2" class="podium-place second-place">
+            <div class="place-rank">2</div>
+            <div class="place-info">
+              <div class="place-username">{{ finalsResults[1]?.participant?.username }}</div>
+              <div class="place-score">{{ finalsResults[1]?.totalPoints }}分</div>
             </div>
           </div>
 
-          <!-- 参赛选手预览 -->
-          <div
-            class="participants-compact"
-            v-if="getCurrentStageParticipants().length > 0"
-          >
-            <h3>{{ getCurrentGroupName() }}参赛选手</h3>
-            <div class="participants-list">
-              <div
-                v-for="(
-                  participant, index
-                ) in getCurrentStageParticipants().slice(0, 8)"
-                :key="participant.id"
-                class="participant-item"
-              >
-                <span class="participant-num">{{ index + 1 }}.</span>
-                <span class="participant-name">{{ participant.nickname }}</span>
-              </div>
-              <div
-                v-if="getCurrentStageParticipants().length > 8"
-                class="more-participants"
-              >
-                +{{ getCurrentStageParticipants().length - 8 }}人
-              </div>
+          <div v-if="finalsResults.length >= 1" class="podium-place first-place">
+            <div class="place-rank">1</div>
+            <div class="place-info">
+              <div class="place-username">{{ finalsResults[0]?.participant?.username }}</div>
+              <div class="place-score">{{ finalsResults[0]?.totalPoints }}分</div>
+            </div>
+            <div class="winner-crown">👑</div>
+          </div>
+
+          <div v-if="finalsResults.length >= 3" class="podium-place third-place">
+            <div class="place-rank">3</div>
+            <div class="place-info">
+              <div class="place-username">{{ finalsResults[2]?.participant?.username }}</div>
+              <div class="place-score">{{ finalsResults[2]?.totalPoints }}分</div>
             </div>
           </div>
         </div>
 
-        <!-- 右侧：当前积分榜 -->
-        <div class="right-main">
-          <div
-            class="current-standings"
-            v-if="getCurrentStandings().length > 0"
-          >
-            <h2>{{ getCurrentGroupName() }}积分榜</h2>
-            <div class="standings-table">
-              <div
-                v-for="(standing, index) in getCurrentStandings().slice(0, 10)"
-                :key="standing.participantId"
-                class="standing-row"
-                :class="{ 'top-three': index < 3 }"
-              >
-                <div class="standing-rank">{{ standing.rank }}</div>
-                <div class="standing-player">
-                  {{ getParticipantName(standing.participantId) }}
-                </div>
-                <div class="standing-points">{{ standing.totalPoints }}分</div>
-                <div class="standing-score">{{ standing.totalRawScore }}</div>
+        <!-- 决赛完整排名 -->
+        <div class="full-results">
+          <h3>决赛完整排名</h3>
+          <div class="results-columns">
+            <div
+              v-for="result in finalsResults"
+              :key="result.participantId"
+              class="result-card"
+              :class="{ 'top-three': result.rank <= 3 }"
+            >
+              <div class="result-rank">{{ result.rank }}</div>
+              <div class="result-info">
+                <div class="result-username">{{ result.participant?.username }}</div>
+                <div class="result-nickname">{{ result.participant?.nickname }}</div>
+                <div class="result-score">{{ result.totalPoints }}分</div>
               </div>
-              <div
-                v-if="getCurrentStandings().length > 10"
-                class="more-standings"
-              >
-                还有{{ getCurrentStandings().length - 10 }}名参赛选手...
+              <div v-if="result.rank <= 3" class="rank-badge">
+                <span v-if="result.rank === 1">👑</span>
+                <span v-else-if="result.rank === 2">🥈</span>
+                <span v-else-if="result.rank === 3">🥉</span>
               </div>
             </div>
           </div>
         </div>
       </div>
+
+      <!-- 否则展示默认等待页内容 -->
+      <template v-else>
+        <!-- 主要内容区 -->
+        <div class="waiting-main">
+          <!-- 左侧：当前阶段信息和参赛选手 -->
+          <div class="left-sidebar">
+            <div class="stage-info">
+              <h2>当前阶段</h2>
+              <div class="stage-card">
+                <div class="stage-name">{{ getCurrentStageInfo().name }}</div>
+                <div class="stage-status">{{ getCurrentStageInfo().status }}</div>
+                <div class="stage-progress">
+                  <div class="progress-text">
+                    {{ getCurrentStageInfo().progress }}
+                  </div>
+                </div>
+                <!-- 等待状态动画 -->
+                <div
+                  v-if="displayState === 'waiting'"
+                  class="waiting-indicator-inline"
+                >
+                  <div class="loading-animation">
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                    <div class="dot"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 参赛选手预览 -->
+            <div
+              class="participants-compact"
+              v-if="getCurrentStageParticipants().length > 0"
+            >
+              <h3>{{ getCurrentGroupName() }}参赛选手</h3>
+              <div class="participants-list">
+                <div
+                  v-for="(
+                    participant, index
+                  ) in getCurrentStageParticipants().slice(0, 8)"
+                  :key="participant.id"
+                  class="participant-item"
+                >
+                  <span class="participant-num">{{ index + 1 }}.</span>
+                  <span class="participant-name">{{ participant.nickname }}</span>
+                </div>
+                <div
+                  v-if="getCurrentStageParticipants().length > 8"
+                  class="more-participants"
+                >
+                  +{{ getCurrentStageParticipants().length - 8 }}人
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 右侧：当前积分榜 -->
+          <div class="right-main">
+            <div
+              class="current-standings"
+              v-if="getCurrentStandings().length > 0"
+            >
+              <h2>{{ getCurrentGroupName() }}积分榜</h2>
+              <div class="standings-table">
+                <div
+                  v-for="(standing, index) in getCurrentStandings().slice(0, 10)"
+                  :key="standing.participantId"
+                  class="standing-row"
+                  :class="{ 'top-three': index < 3 }"
+                >
+                  <div class="standing-rank">{{ standing.rank }}</div>
+                  <div class="standing-player">
+                    {{ getParticipantName(standing.participantId) }}
+                  </div>
+                  <div class="standing-points">{{ standing.totalPoints }}分</div>
+                  <div class="standing-score">{{ standing.totalRawScore }}</div>
+                </div>
+                <div
+                  v-if="getCurrentStandings().length > 10"
+                  class="more-standings"
+                >
+                  还有{{ getCurrentStandings().length - 10 }}名参赛选手...
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
     </div>
 
     <!-- 比赛准备阶段 - 显示参赛名单 -->
@@ -108,13 +172,10 @@
         <h2 class="match-title">
           {{ currentMatch?.groupName }} - 第{{ currentMatch?.roundNumber }}轮
         </h2>
-        <div class="match-info">
-          <span>{{ currentMatch?.players.length }} 名选手参赛</span>
-        </div>
       </div>
 
       <div class="participants-display">
-        <h3>参赛选手</h3>
+        <h3>{{ currentMatch?.players.length }} 名选手参赛</h3>
         <div class="participants-grid">
           <div
             v-for="(player, index) in selectedUsers"
@@ -243,7 +304,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted, computed, nextTick } from "vue";
+import { ref, onMounted, onUnmounted, computed, nextTick, watch } from "vue";
 import Game from "./Game.vue";
 import { tournamentStore } from "../stores/tournament";
 
@@ -282,10 +343,135 @@ const gameComponent = ref<InstanceType<typeof Game> | null>(null);
 // 计算属性
 const tournament = computed(() => tournamentStore.getState().tournament);
 
+// 决赛结果（丰富参赛者信息）
+const finalsResults = computed(() => {
+  const t = tournament.value;
+  if (!t) return [] as Array<any>;
+  const finals = t.stages?.finals;
+  if (!finals || finals.groups.length === 0) return [] as Array<any>;
+  const standings = finals.groups[0]?.standings || [];
+  return standings
+    .slice()
+    .sort((a: any, b: any) => a.rank - b.rank)
+    .map((s: any) => ({
+      ...s,
+      participant: t.allParticipants.find((p) => p.id === s.participantId),
+    }));
+});
+
+// 是否显示终极结果页（等待态 + 已完成）
+const isFinaleVisible = computed(
+  () => displayState.value === 'waiting' && tournament.value?.status === 'completed'
+);
+
+// 只播放一次礼花动画
+const hasPlayedFinaleConfetti = ref(false);
+
+// 监听终极结果页的出现，触发礼花动画
+watch(isFinaleVisible, (visible, prev) => {
+  if (visible && !prev && !hasPlayedFinaleConfetti.value) {
+    launchConfetti();
+    hasPlayedFinaleConfetti.value = true;
+  }
+});
+
+// 简易礼花动画（无第三方依赖）
+let confettiRaf: number | null = null;
+const launchConfetti = () => {
+  const canvas = document.createElement('canvas');
+  canvas.className = 'confetti-canvas';
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+
+  const resize = () => {
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+  };
+  resize();
+  window.addEventListener('resize', resize);
+
+  document.body.appendChild(canvas);
+
+  const colors = ['#ffd700', '#c0c0c0', '#cd7f32', '#4ade80', '#22c55e', '#60a5fa', '#f59e0b', '#ef4444'];
+  const rand = (min: number, max: number) => Math.random() * (max - min) + min;
+
+  const particleCount = Math.min(180, Math.floor((canvas.width * canvas.height) / 40000));
+  const gravity = 0.15;
+  const drag = 0.005;
+  const terminalVel = 4.5;
+
+  const particles = Array.from({ length: particleCount }).map(() => ({
+    x: rand(0, canvas.width),
+    y: rand(-canvas.height * 0.3, -10),
+    w: rand(6, 10),
+    h: rand(8, 14),
+    vx: rand(-2.5, 2.5),
+    vy: rand(0, 2),
+    color: colors[Math.floor(Math.random() * colors.length)],
+    angle: rand(0, Math.PI * 2),
+    spin: rand(-0.15, 0.15),
+    alpha: 1,
+  }));
+
+  const start = performance.now();
+  const duration = 5500; // ms
+
+  const tick = (t: number) => {
+    if (!ctx) return;
+    const elapsed = t - start;
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+    for (const p of particles) {
+      // physics
+      p.vx *= (1 - drag);
+      p.vy = Math.min(p.vy + gravity, terminalVel);
+      p.x += p.vx;
+      p.y += p.vy;
+      p.angle += p.spin;
+
+      // wrap on sides
+      if (p.x < -20) p.x = canvas.width + 20;
+      if (p.x > canvas.width + 20) p.x = -20;
+
+      // fade near end
+      if (elapsed > duration * 0.7) {
+        p.alpha = Math.max(0, 1 - (elapsed - duration * 0.7) / (duration * 0.3));
+      }
+
+      // draw
+      ctx.save();
+      ctx.globalAlpha = p.alpha;
+      ctx.translate(p.x, p.y);
+      ctx.rotate(p.angle);
+      ctx.fillStyle = p.color;
+      ctx.fillRect(-p.w / 2, -p.h / 2, p.w, p.h);
+      ctx.restore();
+    }
+
+    if (elapsed < duration) {
+      confettiRaf = requestAnimationFrame(tick);
+    } else {
+      cleanup();
+    }
+  };
+
+  const cleanup = () => {
+    if (confettiRaf) cancelAnimationFrame(confettiRaf);
+    confettiRaf = null;
+    window.removeEventListener('resize', resize);
+    if (canvas.parentNode) canvas.parentNode.removeChild(canvas);
+  };
+
+  confettiRaf = requestAnimationFrame(tick);
+};
+
 // 存储打乱后的参赛选手列表
 const shuffledUsers = ref<
   Array<{ userId: number; username: string; nickname: string }>
 >([]);
+
+// 记录最近一次比赛所属的小组，用于比赛完成后在等待页继续展示该组的最终积分榜
+const lastGroupId = ref<string | null>(null);
 
 const selectedUsers = computed(() => shuffledUsers.value);
 
@@ -348,50 +534,23 @@ const getCurrentStageInfo = () => {
     completed: "已完成",
   };
 
-  // 计算进度 - 提供多种计算方式
+  // 计算进度：显示小组轮次进度或整体轮次进度（排除加赛）
   let progress = "等待开始";
-  if (stage.groups && stage.groups.length > 0) {
-    // 方式1: 统计所有比赛
-    let totalMatches = 0;
-    let completedMatches = 0;
-    let pendingMatches = 0;
-    let runningMatches = 0;
-
-    stage.groups.forEach((group: any) => {
-      if (group.matches && Array.isArray(group.matches)) {
-        totalMatches += group.matches.length;
-        group.matches.forEach((match: any) => {
-          if (match.status === "completed") completedMatches++;
-          else if (match.status === "running") runningMatches++;
-          else if (match.status === "pending") pendingMatches++;
-        });
-      }
-    });
-
-    // 方式2: 统计小组状态
-    const completedGroups = stage.groups.filter(
-      (group: any) => group.status === "completed"
-    ).length;
-    const inProgressGroups = stage.groups.filter(
-      (group: any) => group.status === "in_progress"
-    ).length;
-    const totalGroups = stage.groups.length;
-
-    // 根据数据情况选择显示方式
-    if (totalMatches > 0) {
-      if (runningMatches > 0) {
-        progress = `进行中 (${completedMatches}/${totalMatches} 场完成)`;
-      } else {
-        progress = `${completedMatches}/${totalMatches} 场比赛完成`;
-      }
-    } else if (totalGroups > 0) {
-      if (inProgressGroups > 0) {
-        progress = `进行中 (${completedGroups}/${totalGroups} 小组完成)`;
-      } else {
-        progress = `${completedGroups}/${totalGroups} 小组完成`;
-      }
+  const stageConfig = tournamentStore.getConfig()?.stages[tournamentData.currentStage];
+  const totalRoundsPerGroup = stageConfig?.rounds || 0;
+  if (stage.groups && stage.groups.length > 0 && totalRoundsPerGroup > 0) {
+    // 如果存在最近比赛的小组，则显示该组的轮次进度
+    if (lastGroupId.value) {
+      const g = (stage.groups as any[]).find((gg) => gg.id === lastGroupId.value) || stage.groups[0];
+      const cr = Math.min(g.currentRound || 0, totalRoundsPerGroup);
+      const statusText = g.status === 'completed' ? '已完成' : (g.status === 'in_progress' ? '进行中' : '准备中');
+      progress = `${statusText} (${cr}/${totalRoundsPerGroup} 轮)`;
     } else {
-      progress = "准备阶段";
+      // 聚合所有小组的轮次进度
+      const sumRounds = (stage.groups as any[]).reduce((sum, g) => sum + Math.min(g.currentRound || 0, totalRoundsPerGroup), 0);
+      const total = stage.groups.length * totalRoundsPerGroup;
+      const anyRunning = (stage.groups as any[]).some((g) => g.status === 'in_progress');
+      progress = `${anyRunning ? '进行中' : '进度'} (${sumRounds}/${total} 轮)`;
     }
   }
 
@@ -414,6 +573,14 @@ const getCurrentStageParticipants = () => {
       nickname: player.nickname,
       username: player.username,
     }));
+  }
+
+  // 若有最近比赛的小组，优先返回该组
+  if (lastGroupId.value) {
+    for (const [, stage] of Object.entries(tournamentData.stages) as any) {
+      const g = stage.groups?.find((gg: any) => gg.id === lastGroupId.value);
+      if (g) return g.participants || [];
+    }
   }
 
   // 找到当前活跃的组
@@ -449,6 +616,17 @@ const getCurrentStandings = () => {
     }
   }
 
+  // 若有最近的小组，优先显示该组的积分榜（比赛结束返回等待页后也能看到最终榜单）
+  if (lastGroupId.value) {
+    const stageEntries = Object.entries(tournamentData.stages);
+    for (const [, stage] of stageEntries as any) {
+      const g = stage.groups?.find((gg: any) => gg.id === lastGroupId.value);
+      if (g && g.standings) {
+        return [...g.standings].sort((a, b) => a.rank - b.rank);
+      }
+    }
+  }
+
   // 找到当前活跃的组
   const activeGroup = findActiveGroup(tournamentData);
   if (activeGroup && activeGroup.standings) {
@@ -465,9 +643,17 @@ const getCurrentGroupName = () => {
     return currentMatch.value.groupName;
   }
 
-  // 否则显示当前活跃组的名称
+  // 否则显示最近的小组或当前活跃组的名称
   const tournamentData = tournament.value;
   if (!tournamentData) return "当前组";
+
+  if (lastGroupId.value) {
+    const stageEntries = Object.entries(tournamentData.stages);
+    for (const [, stage] of stageEntries as any) {
+      const g = stage.groups?.find((gg: any) => gg.id === lastGroupId.value);
+      if (g) return g.name || "当前组";
+    }
+  }
 
   const activeGroup = findActiveGroup(tournamentData);
   if (activeGroup) {
@@ -561,6 +747,8 @@ const handleMatchCommand = (command: any) => {
   console.log("收到比赛指令:", command);
 
   if (command.action === "START_MATCH") {
+    // 记录当前小组
+    lastGroupId.value = command.groupId || null;
     currentMatch.value = {
       matchId: command.matchId,
       groupId: command.groupId,
@@ -764,6 +952,15 @@ onUnmounted(() => {
   image-rendering: crisp-edges;
 }
 
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  z-index: 9999;
+}
+
 /* 等待状态 */
 .waiting-state {
   height: 100vh;
@@ -829,6 +1026,27 @@ onUnmounted(() => {
   grid-template-columns: 300px 1fr;
   gap: 30px;
   padding: 40px;
+}
+
+/* 终极结果页样式 */
+.finale-container {
+  padding: 30px 40px;
+}
+
+.finale-header {
+  text-align: center;
+  margin: 20px 0 10px;
+}
+
+.finale-title {
+  color: var(--accent-color);
+  font-size: 24px;
+  margin-bottom: 8px;
+}
+
+.finale-subtitle {
+  color: var(--text-secondary);
+  font-size: 14px;
 }
 
 .left-sidebar {

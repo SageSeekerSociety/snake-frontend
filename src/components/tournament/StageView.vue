@@ -407,24 +407,36 @@ const hasPlayoffTie = (group: Group) => {
   return (group.standings || []).some(s => s.needsPlayoff);
 };
 
-// 计算本并列块需要取几人（根据配置的目的地晋级名额，至少1人）
-const computeWinnersNeeded = (rank: number, blockSize: number) => {
+// 计算加赛需要取几人：基于赛制定义，从较好名次到当前名次，逐级分配名额，若在当前rank出现并列且剩余名额不足，则需要在当前并列中取 slots 个
+const computeWinnersNeeded = (rank: number, group: Group) => {
   if (!props.config) return 1;
   const outcomes = props.config.outcomes || {};
+  const standings = group.standings || [];
   let needed = 0;
-  const start = rank;
-  const end = rank + blockSize - 1;
+
   Object.values(outcomes).forEach((outcome: any) => {
-    if (!outcome.destination) return; // 仅统计晋级目的地
-    const ranks = Array.isArray(outcome.ranks) ? outcome.ranks : [outcome.ranks];
-    const min = Math.min(...ranks);
-    const max = Math.max(...ranks);
-    const intersectStart = Math.max(start, min);
-    const intersectEnd = Math.min(end, max);
-    const count = Math.max(0, intersectEnd - intersectStart + 1);
-    needed += count;
+    const ranksArr = Array.isArray(outcome.ranks) ? outcome.ranks : [outcome.ranks];
+    const allowedRanks = Array.from(new Set(ranksArr as number[])).sort((a, b) => a - b);
+    if (!allowedRanks.includes(rank)) return; // 当前rank不在该结果区间
+
+    let slots = allowedRanks.length; // 名额等于名次数
+    for (const r of allowedRanks) {
+      const cnt = standings.filter(s => s.rank === r).length;
+      if (r < rank) {
+        slots -= cnt;
+        continue;
+      }
+      if (r === rank) {
+        if (cnt > slots) {
+          // 并列人数大于剩余名额 -> 需要在该并列中决出 slots 个
+          needed = Math.max(needed, Math.max(1, slots));
+        }
+        break;
+      }
+    }
   });
-  return Math.max(1, needed);
+
+  return Math.max(1, needed || 1);
 };
 
 // 开始加赛（仅包含并列的选手）
@@ -438,8 +450,7 @@ const startPlayoff = async (group: Group) => {
   ties.sort((a, b) => a.rank - b.rank);
   const targetRank = ties[0].rank;
   const tieBlock = standings.filter(s => s.rank === targetRank);
-  const blockSize = tieBlock.length;
-  const winnersNeeded = computeWinnersNeeded(targetRank, blockSize);
+  const winnersNeeded = computeWinnersNeeded(targetRank, group);
 
   // 参赛选手列表（并列块中的选手）
   const players = tieBlock

@@ -168,7 +168,7 @@
           导出获奖名单
         </button>
         <button @click="generateCertificates" class="pixel-button certificates-button">
-          生成获奖证书
+          导出证书信息
         </button>
       </div>
     </div>
@@ -298,67 +298,7 @@ const exportCompleteResults = () => {
     ExcelExportService.exportTournamentResults(props.tournament, props.config);
   }).catch(error => {
     console.error('Excel导出失败:', error);
-    // 备用方案：导出文本文件
-    let content = `${props.tournament.name} - 完整比赛结果\n`;
-    content += `完成时间: ${formatCompletionTime()}\n`;
-    content += `总参赛人数: ${props.tournament.allParticipants.length}\n`;
-    content += '='.repeat(60) + '\n\n';
-
-    // 决赛结果
-    if (finalsResults.value.length > 0) {
-      content += '🏆 决赛结果\n';
-      content += '-'.repeat(40) + '\n';
-      finalsResults.value.forEach(result => {
-        content += `${result.rank}. ${result.participant?.username} (${result.participant?.nickname}) - ${result.totalPoints}分`;
-        if (result.award) content += ` [${result.award}]`;
-        content += '\n';
-      });
-      content += '\n';
-    }
-
-    // 附加赛结果
-    if (playoffResults.value.length > 0) {
-      content += '⚔️ 附加赛结果\n';
-      content += '-'.repeat(40) + '\n';
-      playoffResults.value.forEach(result => {
-        content += `${result.rank}. ${result.participant?.username} (${result.participant?.nickname}) - ${result.totalPoints}分`;
-        if (result.award) content += ` [${result.award}]`;
-        content += '\n';
-      });
-      content += '\n';
-    }
-
-    // 小组赛结果
-    if (groupStageResults.value.length > 0) {
-      content += '👥 小组赛结果\n';
-      content += '-'.repeat(40) + '\n';
-      getGroupsSummary().forEach(group => {
-        content += `${group.name}:\n`;
-        group.results.forEach(result => {
-          content += `  ${result.rank}. ${result.participant?.username} - ${result.totalPoints}分`;
-          if (result.award) content += ` [${result.award}]`;
-          if (result.isAdvanced) content += ` [晋级${result.advancedTo}]`;
-          content += '\n';
-        });
-        content += '\n';
-      });
-    }
-
-    // 获奖统计
-    content += '📊 获奖统计\n';
-    content += '-'.repeat(40) + '\n';
-    Object.entries(awardsSummary.value).forEach(([award, count]) => {
-      content += `${award}: ${count} 人\n`;
-    });
-
-    // 下载文件
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${props.tournament.name}-完整结果.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    alert('导出失败，请重试');
   });
 };
 
@@ -369,96 +309,20 @@ const exportAwardsList = () => {
     ExcelExportService.exportAwardsList(props.tournament);
   }).catch(error => {
     console.error('Excel导出失败:', error);
-    // 备用方案：导出文本文件
-    let content = `${props.tournament.name} - 获奖名单\n`;
-    content += `完成时间: ${formatCompletionTime()}\n`;
-    content += '='.repeat(50) + '\n\n';
-
-    // 按奖项分类
-    const awardsByType: Record<string, EnrichedStanding[]> = {};
-    const allResults = [
-      ...finalsResults.value,
-      ...playoffResults.value,
-      ...groupStageResults.value
-    ];
-
-    allResults.forEach(result => {
-      if (result.award) {
-        if (!awardsByType[result.award]) {
-          awardsByType[result.award] = [];
-        }
-        awardsByType[result.award].push(result);
-      }
-    });
-
-    // 按奖项等级排序
-    const awardOrder = ['一等奖', '二等奖', '三等奖', '优胜奖'];
-    awardOrder.forEach(awardType => {
-      Object.keys(awardsByType).forEach(award => {
-        if (award.includes(awardType)) {
-          content += `${getAwardIcon(award)} ${award} (${awardsByType[award].length}人)\n`;
-          content += '-'.repeat(30) + '\n';
-          
-          awardsByType[award]
-            .sort((a, b) => a.rank - b.rank)
-            .forEach((result, index) => {
-              content += `${index + 1}. ${result.participant?.username} (${result.participant?.nickname})\n`;
-            });
-          content += '\n';
-        }
-      });
-    });
-
-    // 下载文件
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `${props.tournament.name}-获奖名单.txt`;
-    a.click();
-    URL.revokeObjectURL(url);
+    alert('导出失败，请重试');
   });
 };
 
-// 生成获奖证书（暂时只是导出名单格式）
+// 导出获奖证书信息（表格）
 const generateCertificates = () => {
-  let content = `${props.tournament.name} - 获奖证书信息\n`;
-  content += '='.repeat(60) + '\n\n';
-
-  const allResults = [
-    ...finalsResults.value,
-    ...playoffResults.value,
-    ...groupStageResults.value
-  ];
-
-  allResults
-    .filter(result => result.award)
-    .sort((a, b) => {
-      // 按奖项等级和排名排序
-      const awardOrder: Record<string, number> = { '一等奖': 1, '二等奖': 2, '三等奖': 3, '优胜奖': 4 };
-      const aLevel = Math.min(...Object.entries(awardOrder).filter(([key]) => a.award!.includes(key)).map(([, value]) => value));
-      const bLevel = Math.min(...Object.entries(awardOrder).filter(([key]) => b.award!.includes(key)).map(([, value]) => value));
-      if (aLevel !== bLevel) return aLevel - bLevel;
-      return a.rank - b.rank;
+  import('../../services/excelExportService')
+    .then(({ ExcelExportService }) => {
+      ExcelExportService.exportCertificatesInfo(props.tournament);
     })
-    .forEach(result => {
-      content += `证书编号: ${props.tournament.tournamentId.slice(0, 8).toUpperCase()}-${result.participantId.slice(-4).toUpperCase()}\n`;
-      content += `获奖人员: ${result.participant?.username} (${result.participant?.nickname})\n`;
-      content += `获得奖项: ${result.award}\n`;
-      content += `总积分: ${result.totalPoints}分\n`;
-      content += `比赛名称: ${props.tournament.name}\n`;
-      content += `颁发日期: ${formatCompletionTime()}\n`;
-      content += '-'.repeat(60) + '\n\n';
+    .catch(error => {
+      console.error('Excel导出失败:', error);
+      alert('导出失败，请重试');
     });
-
-  // 下载文件
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `${props.tournament.name}-获奖证书信息.txt`;
-  a.click();
-  URL.revokeObjectURL(url);
 };
 </script>
 

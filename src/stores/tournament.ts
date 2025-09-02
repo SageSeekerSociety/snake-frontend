@@ -570,51 +570,28 @@ class TournamentStore {
       standing.isAdvanced = standing.isAdvanced; // 保留可能由上一阶段设置的状态，但不会在本组内改变
     });
 
-    // 如配置要求：当总积分与小分仍完全相同且本组已打满所有轮次，则标记需要加赛
+    // 如配置要求：当总积分与小分仍完全相同且本组已打满所有轮次，若某个结果区间（晋级或奖项）发生名额溢出，则标记需要加赛
     const requirePlayoff = Array.isArray(stageConfig.tiebreaker) && stageConfig.tiebreaker.includes('playoff_required');
     if (requirePlayoff && group.currentRound >= (stageConfig.rounds || 0)) {
-      // 查找所有并列组（相邻且rank相同）
-      const tieGroups: { start: number; end: number }[] = [];
-      let i = 0;
-      while (i < standings.length) {
-        const jStart = i;
-        let j = i + 1;
-        while (j < standings.length && standings[j].rank === standings[jStart].rank) {
-          j++;
-        }
-        if (j - jStart > 1) {
-          tieGroups.push({ start: jStart, end: j - 1 });
-        }
-        i = j;
-      }
-
-      if (tieGroups.length > 0) {
-        // 如果并列组跨越任何一个“晋级/获奖”边界，则标记这些人需要加赛
-        const outcomeRanges: Array<{ min: number; max: number }> = [];
-        if (stageConfig.outcomes) {
-          Object.values(stageConfig.outcomes).forEach((outcome: any) => {
-            const ranks = Array.isArray(outcome.ranks) ? outcome.ranks : [outcome.ranks];
-            outcomeRanges.push({ min: Math.min(...ranks), max: Math.max(...ranks) });
-          });
-        }
-
-        tieGroups.forEach(({ start, end }) => {
-          const groupRank = standings[start].rank;
-          // 判断该并列名次是否与任何结果范围的边界发生冲突
-          let conflictsBoundary = false;
-          for (const range of outcomeRanges) {
-            // 边界位置出现在range.min-1与range.min之间或range.max与range.max+1之间
-            // 更简化：如果该rank位于任何range之内，则可能多占名额；如果该rank与range的上下边界邻接，也可能影响名额
-            if (groupRank >= range.min && groupRank <= range.max) {
-              conflictsBoundary = true;
-              break;
+      if (stageConfig.outcomes) {
+        Object.values(stageConfig.outcomes).forEach((outcome: any) => {
+          const ranksArr = Array.isArray(outcome.ranks) ? outcome.ranks : [outcome.ranks];
+          const allowedRanks = Array.from(new Set(ranksArr as number[])).sort((a, b) => a - b);
+          if (allowedRanks.length === 0) return;
+          let slots = allowedRanks.length; // 可用名额 = 名次数
+          for (const r of allowedRanks) {
+            const atRank = standings.filter(s => s.rank === r);
+            const cnt = atRank.length;
+            if (cnt === 0) continue;
+            if (cnt <= slots) {
+              slots -= cnt;
+              continue;
             }
-          }
-
-          if (conflictsBoundary) {
-            for (let k = start; k <= end; k++) {
-              standings[k].needsPlayoff = true;
-            }
+            // 出现溢出：当前rank出现并列且剩余名额不足
+            // 标记该rank全部为需要加赛
+            atRank.forEach(s => { s.needsPlayoff = true; });
+            // 不再继续检查更低优先级的rank
+            break;
           }
         });
       }
@@ -635,15 +612,18 @@ class TournamentStore {
       const maxRank = Math.max(...ranks);
 
       group.standings.forEach(standing => {
-        // 若存在需要加赛的并列，暂不授予晋级/奖项，待加赛后再定
-        if (standing.rank >= minRank && standing.rank <= maxRank && !standing.needsPlayoff) {
-          if (outcome.destination) {
-            // 晋级
+        const inRange = standing.rank >= minRank && standing.rank <= maxRank;
+        if (!inRange) return;
+        // 晋级：若该名次处被标记需要加赛，则暂不授予，待加赛后再定
+        if (outcome.destination) {
+          if (!standing.needsPlayoff) {
             standing.isAdvanced = true;
             standing.advancedTo = outcome.destination;
           }
-          if (outcome.award) {
-            // 获奖
+        }
+        // 奖项：若该名次处被标记需要加赛，则暂不授予，待加赛后再定（不允许超额）
+        if (outcome.award) {
+          if (!standing.needsPlayoff) {
             standing.award = outcome.award;
           }
         }

@@ -1,5 +1,5 @@
 import * as XLSX from 'xlsx';
-import { TournamentState, ParticipantStanding, Participant } from '../types/Tournament';
+import { TournamentState, ParticipantStanding, Participant, MatchRecord } from '../types/Tournament';
 import { TournamentConfig } from './tournamentConfigLoader';
 
 export class ExcelExportService {
@@ -67,7 +67,7 @@ export class ExcelExportService {
       const data = [
         [`${awardType} 获奖名单`],
         [],
-        ['排名', '学号', '姓名', '总积分', '最高分', '来源阶段']
+        ['排名', '学号', '姓名', '总积分', '总得分', '来源阶段']
       ];
 
       participants.forEach((participant, index) => {
@@ -89,7 +89,7 @@ export class ExcelExportService {
         { width: 15 },  // 学号
         { width: 20 },  // 姓名
         { width: 12 },  // 总积分
-        { width: 12 },  // 最高分
+        { width: 12 },  // 总得分
         { width: 15 }   // 来源阶段
       ];
 
@@ -151,6 +151,149 @@ export class ExcelExportService {
   }
 
   /**
+   * 导出当前页面的详细积分榜到Excel（用于 StandingsTable）
+   */
+  static exportStandingsTable(
+    standings: ParticipantStanding[],
+    participants: Participant[],
+    matches: MatchRecord[],
+    filenameBase = '积分榜'
+  ): void {
+    const wb = XLSX.utils.book_new();
+
+    const roundCount = matches.length > 0 ? Math.max(...matches.map(m => m.roundNumber)) : 0;
+
+    const header = [
+      '排名',
+      '学号',
+      '姓名',
+      '总积分',
+      '总得分',
+    ];
+    for (let i = 1; i <= roundCount; i++) {
+      header.push(`第${i}轮积分`, `第${i}轮排名`, `第${i}轮原始分`);
+    }
+    header.push('状态', '奖项', '晋级到');
+
+    const data: any[][] = [
+      ['详细积分榜'],
+      [],
+      header,
+    ];
+
+    const getRoundResult = (participantId: string, round: number) => {
+      const match = matches.find(m => m.roundNumber === round);
+      return match?.results.find(r => r.participantId === participantId) || null;
+    };
+
+    standings.forEach(standing => {
+      const p = participants.find(pp => pp.id === standing.participantId);
+      const row: any[] = [
+        standing.rank,
+        p?.username || '',
+        p?.nickname || '',
+        standing.totalPoints,
+        standing.totalRawScore,
+      ];
+      for (let round = 1; round <= roundCount; round++) {
+        const r = getRoundResult(standing.participantId, round);
+        if (r) {
+          row.push(r.roundPoints, r.rank, r.rawScore);
+        } else {
+          row.push('', '', '');
+        }
+      }
+      const statusParts: string[] = [];
+      if (standing.isAdvanced) statusParts.push(`晋级${standing.advancedTo || ''}`.trim());
+      if (standing.needsPlayoff) statusParts.push('需要加赛');
+      data.push([
+        ...row,
+        statusParts.join('、'),
+        standing.award || '',
+        standing.isAdvanced ? (standing.advancedTo || '') : '',
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    // 设置列宽（适度）
+    ws['!cols'] = [
+      { width: 6 },   // 排名
+      { width: 16 },  // 学号
+      { width: 18 },  // 姓名
+      { width: 10 },  // 总积分
+      { width: 10 },  // 总得分
+      ...Array(roundCount * 3).fill({ width: 10 }),
+      { width: 14 },  // 状态
+      { width: 12 },  // 奖项
+      { width: 12 },  // 晋级到
+    ];
+
+    XLSX.utils.book_append_sheet(wb, ws, '详细积分榜');
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${filenameBase}-${timestamp}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  }
+
+  /**
+   * 导出获奖证书信息到Excel
+   */
+  static exportCertificatesInfo(tournament: TournamentState): void {
+    const wb = XLSX.utils.book_new();
+
+    const data: any[][] = [
+      [`${tournament.name} - 获奖证书信息`],
+      [],
+      ['证书编号', '学号', '姓名', '奖项', '总积分', '比赛名称', '颁发日期'],
+    ];
+
+    const finalsStage = tournament.stages.finals;
+    const completionTime = finalsStage?.endTime ? new Date(finalsStage.endTime) : new Date();
+    const issueDate = completionTime.toLocaleString('zh-CN');
+
+    const allStandings: ParticipantStanding[] = [];
+    Object.values(tournament.stages).forEach(stage => {
+      stage.groups.forEach(group => {
+        group.standings.forEach(s => allStandings.push(s));
+      });
+    });
+
+    const awarded = allStandings
+      .filter(s => !!s.award)
+      .sort((a, b) => a.rank - b.rank);
+
+    awarded.forEach(s => {
+      const p = tournament.allParticipants.find(pp => pp.id === s.participantId);
+      const certNo = `${tournament.tournamentId.slice(0, 8).toUpperCase()}-${s.participantId.slice(-4).toUpperCase()}`;
+      data.push([
+        certNo,
+        p?.username || '',
+        p?.nickname || '',
+        s.award || '',
+        s.totalPoints,
+        tournament.name,
+        issueDate,
+      ]);
+    });
+
+    const ws = XLSX.utils.aoa_to_sheet(data);
+    ws['!cols'] = [
+      { width: 20 }, // 证书编号
+      { width: 16 }, // 学号
+      { width: 18 }, // 姓名
+      { width: 12 }, // 奖项
+      { width: 10 }, // 总积分
+      { width: 24 }, // 比赛名称
+      { width: 22 }, // 颁发日期
+    ];
+    XLSX.utils.book_append_sheet(wb, ws, '证书信息');
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${tournament.name}-获奖证书信息-${timestamp}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  }
+
+  /**
    * 创建总览数据
    */
   private static createOverviewData(tournament: TournamentState, config: TournamentConfig | null): any[][] {
@@ -199,7 +342,7 @@ export class ExcelExportService {
     const data = [
       [`${stageName} - ${group.name || ''}结果`],
       [],
-      ['排名', '学号', '姓名', '总积分', '最高分', '状态', '奖项']
+      ['排名', '学号', '姓名', '总积分', '总得分', '状态', '奖项']
     ];
 
     group.standings.forEach((standing: ParticipantStanding) => {
@@ -269,7 +412,7 @@ export class ExcelExportService {
     const data = [
       ['获奖名单汇总'],
       [],
-      ['奖项', '学号', '姓名', '总积分', '最高分', '来源阶段']
+      ['奖项', '学号', '姓名', '总积分', '总得分', '来源阶段']
     ];
 
     const allAwardedParticipants = this.getAllAwardedParticipants(tournament);
