@@ -6,6 +6,7 @@ import { EntityFactory } from "../factories/EntityFactory"; // Adjust path as ne
 import { Snake } from "../entities/Snake"; // Adjust path as needed
 import { VortexFieldManager } from "../managers/VortexFieldManager";
 import { SafeZoneManager } from "../managers/SafeZoneManager";
+import { Random } from "../utils/Random";
 
 /**
  * Sampling area bounds in pixel coordinates
@@ -27,6 +28,7 @@ export class FoodGenerator {
     private entityFactory: EntityFactory;
     private vortexFieldManager?: VortexFieldManager;
     private safeZoneManager?: SafeZoneManager;
+    private rng: Random;
 
     // Cached dimensions and config values for performance
     private readonly boxSize = GameConfig.CANVAS.BOX_SIZE;
@@ -42,11 +44,12 @@ export class FoodGenerator {
     private readonly poissonGridWidth = Math.ceil(this.mapWidth / this.poissonCellSize);
     private readonly poissonGridHeight = Math.ceil(this.mapHeight / this.poissonCellSize);
 
-    constructor(entityManager: EntityManager, entityFactory: EntityFactory, vortexFieldManager?: VortexFieldManager, safeZoneManager?: SafeZoneManager) {
+    constructor(entityManager: EntityManager, entityFactory: EntityFactory, vortexFieldManager: VortexFieldManager | undefined, safeZoneManager: SafeZoneManager | undefined, rng: Random) {
         this.entityManager = entityManager;
         this.entityFactory = entityFactory;
         this.vortexFieldManager = vortexFieldManager;
         this.safeZoneManager = safeZoneManager;
+        this.rng = rng;
     }
 
     /**
@@ -249,8 +252,8 @@ export class FoodGenerator {
 
         // Start with a random point within the sampling bounds
         if (samples.length === 0 && maxSamples > 0) {
-            const initialX = boundsX + Math.random() * boundsWidth;
-            const initialY = boundsY + Math.random() * boundsHeight;
+            const initialX = boundsX + this.rng.range(0, boundsWidth);
+            const initialY = boundsY + this.rng.range(0, boundsHeight);
             const initialSample = { x: initialX, y: initialY };
             const initialIndex = 0;
             samples.push(initialSample);
@@ -264,15 +267,15 @@ export class FoodGenerator {
 
         // Process the active list
         while (activeList.length > 0 && samples.length < maxSamples) {
-            const randomIndex = Math.floor(Math.random() * activeList.length);
+            const randomIndex = this.rng.int(0, activeList.length - 1);
             const activeSampleIndex = activeList[randomIndex];
             const activeSample = samples[activeSampleIndex];
             let foundCandidate = false;
 
             // Generate k candidate points around the active sample
             for (let i = 0; i < k; i++) {
-                const angle = Math.random() * Math.PI * 2;
-                const radius = minDistance + Math.random() * minDistance; // Range [d, 2d]
+                const angle = this.rng.angle();
+                const radius = minDistance + this.rng.range(0, minDistance); // Range [d, 2d]
                 const candidateX = activeSample.x + Math.cos(angle) * radius;
                 const candidateY = activeSample.y + Math.sin(angle) * radius;
                 const candidate: Vec2 = { x: candidateX, y: candidateY };
@@ -414,7 +417,7 @@ export class FoodGenerator {
         const totalWeight = phaseWeights.reduce((sum, food) => sum + food.weight, 0);
         if (totalWeight <= 0) return FoodType.NORMAL; // Safety fallback
 
-        const randomNum = Math.random() * totalWeight;
+        const randomNum = this.rng.range(0, totalWeight);
         let weightSum = 0;
         for (const food of phaseWeights) {
             weightSum += food.weight;
@@ -436,7 +439,7 @@ export class FoodGenerator {
             const totalNormalWeight = normalFoods.reduce((sum, food) => sum + food.weight, 0);
             if (totalNormalWeight <= 0) return normalFoods[0].value; // Fallback
 
-            const random = Math.random() * totalNormalWeight;
+            const random = this.rng.range(0, totalNormalWeight);
             let weightSum = 0;
             for (const food of normalFoods) {
                 weightSum += food.weight;
@@ -517,7 +520,7 @@ export class FoodGenerator {
     /** Fisher-Yates (aka Knuth) shuffle algorithm. */
     private _shuffleArray<T>(array: T[]): void {
         for (let i = array.length - 1; i > 0; i--) {
-            const j = Math.floor(Math.random() * (i + 1));
+            const j = this.rng.int(0, i);
             [array[i], array[j]] = [array[j], array[i]];
         }
     }
@@ -545,7 +548,7 @@ export class FoodGenerator {
         }
 
         // Perform weighted random selection
-        const randomNum = Math.random() * totalWeightedNeed;
+        const randomNum = this.rng.range(0, totalWeightedNeed);
         let weightSum = 0;
         for (const item of weightedNeeds) {
             weightSum += item.weight;

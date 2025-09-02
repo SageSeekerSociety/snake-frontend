@@ -240,14 +240,6 @@ onMounted(() => {
   max-height: calc(100vh - 150px);
 }
 
-.panel-header {
-  background-color: var(--border-color);
-  padding: 8px;
-  display: flex;
-  justify-content: center;
-  position: relative;
-}
-
 .panel-title {
   color: #fff;
   text-transform: uppercase;
@@ -259,12 +251,11 @@ onMounted(() => {
 /* 计分项样式 */
 .score-item {
   display: flex;
-  padding: 8px;
+  padding: 4px;
   background-color: rgba(255, 255, 255, 0.07);
   border: 1px solid transparent;
   align-items: center;
   gap: 8px;
-  margin-bottom: 5px;
 }
 
 .score-item:hover {

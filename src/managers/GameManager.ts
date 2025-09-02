@@ -25,6 +25,7 @@ import {
   createSnakePlaceholder,
   getSnakeDisplayName,
 } from "../utils/snakeDisplayUtils";
+import { Random } from "../utils/Random";
 
 /**
  * Orchestrates the overall game flow, managing different subsystems.
@@ -52,14 +53,19 @@ export class GameManager {
   // 游戏录制相关属性
   private isRecording: boolean = false;
   private recordingEnabled: boolean = false;
+  private rng: Random;
+  private gameSeed: string;
 
   constructor(
     canvas: HTMLCanvasElement,
     selectedUsers: Player[] = [], // Pass selected users during construction
-    options: { enableRecording?: boolean } = {}
+    options: { enableRecording?: boolean; seed?: number | string; streamId?: number } = {}
   ) {
     this.selectedUsers = selectedUsers;
     this.recordingEnabled = options.enableRecording || false;
+    const seedInput = options.seed ?? 42;
+    this.rng = new Random(seedInput, options.streamId ?? 54);
+    this.gameSeed = typeof seedInput === 'string' ? seedInput : String(seedInput);
 
     // Initialize core components
     this.canvasManager = new CanvasManager(canvas);
@@ -67,7 +73,7 @@ export class GameManager {
     this.entityFactory = new EntityFactory();
 
     // Initialize vortex field manager first
-    this.vortexFieldManager = new VortexFieldManager();
+    this.vortexFieldManager = new VortexFieldManager(this.rng);
 
     this.entityManager = new EntityManager(
       this.spatialGrid,
@@ -83,7 +89,8 @@ export class GameManager {
       this.entityManager,
       this.entityFactory,
       this.vortexFieldManager,
-      this.safeZoneManager
+      this.safeZoneManager,
+      this.rng
     );
     this.collisionDetector = new CollisionDetector(this.vortexFieldManager);
     this.gameClock = new GameClock(GameConfig.TOTAL_TICKS); // Get total ticks from config
@@ -91,7 +98,9 @@ export class GameManager {
     this.decisionCoordinator = new DecisionRequestCoordinator();
     this.treasureSystem = new TreasureSystem(
       this.entityManager,
-      this.safeZoneManager
+      this.safeZoneManager,
+      undefined,
+      this.rng
     );
 
     // Initialize recording service if enabled
@@ -266,7 +275,8 @@ export class GameManager {
       gameRecordingService.startRecording(
         this.selectedUsers,
         this.gameClock.getTotalTicks(),
-        initialGameState
+        initialGameState,
+        { seed: this.gameSeed }
       );
       this.isRecording = true;
     } catch (error) {

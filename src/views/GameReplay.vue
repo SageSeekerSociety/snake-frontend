@@ -2,7 +2,7 @@
   <div class="replay-container container-base">
     <!-- 回放界面 -->
     <div class="game-ui-container">
-      <GameUILeft class="game-ui-left" />
+      <GameUILeft class="game-ui-left" :seed="currentRecording?.seed || ''" />
 
       <div class="center-column">
         <div class="game-canvas-container pixel-border">
@@ -687,6 +687,18 @@ onMounted(() => {
   max-height: 100%;
   object-fit: contain;
   image-rendering: pixelated;
+}
+
+.seed-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 10px;
+  padding: 6px 8px;
+  z-index: 2;
+  pointer-events: none;
 }
 
 .game-ui-right {

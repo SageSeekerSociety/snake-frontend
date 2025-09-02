@@ -7,6 +7,7 @@ import { eventBus, GameEventType } from "../core/EventBus";
 import { IEntityQuery } from "../interfaces/EntityQuery";
 import { SafeZoneManager } from "./SafeZoneManager";
 import { createSnakePlaceholder } from "../utils/snakeDisplayUtils";
+import { Random } from "../utils/Random";
 
 /** 距离度量模式 */
 enum DistanceMode {
@@ -72,14 +73,17 @@ export class TreasureSystem {
   private treasureSpawnCount: number = 0;
   private pseudoRandomState: PseudoRandomState | null = null;
   private keysFrozenThisTick = false;
+  private rng: Random;
 
   constructor(
     entityQuery: IEntityQuery,
     safeZoneManager: SafeZoneManager,
-    config?: Partial<TreasureSystemConfig>
+    config?: Partial<TreasureSystemConfig>,
+    rng?: Random
   ) {
     this.entityQuery = entityQuery;
     this.safeZoneManager = safeZoneManager;
+    this.rng = rng ?? new Random(1337);
     this.config = {
       enabled: config?.enabled ?? GameConfig.TREASURE_SYSTEM.ENABLED,
       firstTreasureWindow: config?.firstTreasureWindow ?? {
@@ -197,7 +201,7 @@ export class TreasureSystem {
     const gaussianValue = Math.exp(-Math.pow(normalizedPosition, 2) * 3);
     const spawnProbability = 0.02 + 0.13 * gaussianValue;
 
-    const shouldSpawn = Math.random() < spawnProbability;
+    const shouldSpawn = this.rng.chance(spawnProbability);
 
     if (shouldSpawn) {
       this.pseudoRandomState = null;
@@ -438,7 +442,7 @@ export class TreasureSystem {
     // 取分最高的前 K 个候选中随机
     cands.sort((a, b) => b.score - a.score);
     const take = Math.min(topK, cands.length);
-    const picked = cands[Math.floor(Math.random() * take)];
+    const picked = cands[this.rng.int(0, take - 1)];
     return picked.pos;
   }
 
@@ -943,7 +947,7 @@ export class TreasureSystem {
   private shuffleArray<T>(array: T[]): T[] {
     const a = [...array];
     for (let i = a.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = this.rng.int(0, i);
       [a[i], a[j]] = [a[j], a[i]];
     }
     return a;

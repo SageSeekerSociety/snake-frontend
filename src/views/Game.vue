@@ -111,6 +111,12 @@
           <div class="footer-left">
             <div class="random-select-group">
               <input
+                type="text"
+                class="pixel-input seed-input"
+                v-model="seedInput"
+                placeholder="可选：输入本局种子"
+              />
+              <input
                 type="number"
                 class="pixel-input"
                 v-model="randomSelectCount"
@@ -142,7 +148,7 @@
 
     <!-- 游戏界面 -->
     <div v-else class="game-ui-container">
-      <GameUILeft class="game-ui-left" />
+      <GameUILeft class="game-ui-left" :seed="currentSeed" />
       <div class="game-canvas-container">
         <canvas id="gameCanvas" ref="gameCanvas" class="pixel-border"></canvas>
       </div>
@@ -210,6 +216,8 @@ const selectedUsers = ref<Player[]>([]);
 const gameStarted = ref(false);
 const gameCanvas = ref<HTMLCanvasElement | null>(null);
 const gameManager = ref<GameManager | null>(null);
+const seedInput = ref<string>("");
+const currentSeed = ref<string>("");
 
 // 游戏录制相关状态
 const enableRecording = ref<boolean>(true); // 默认启用录制
@@ -421,10 +429,13 @@ const playAgain = () => {
   setTimeout(() => {
     if (gameCanvas.value) {
       // 创建游戏管理器并传递选中的用户和录制选项
+      const input = seedInput.value.trim();
+      const seed = input || String(Date.now());
+      currentSeed.value = seed;
       gameManager.value = new GameManager(
         gameCanvas.value,
         selectedUsers.value,
-        { enableRecording: true } // 始终启用录制
+        { enableRecording: true, seed } // 始终启用录制
       );
 
       // 监听录制保存事件
@@ -470,10 +481,12 @@ const startGameWithSelectedUsers = () => {
   setTimeout(() => {
     if (gameCanvas.value) {
       // 创建游戏管理器并传递选中的用户和录制选项
+      const seed = seedInput.value.trim() || String(Date.now());
+      currentSeed.value = seed;
       gameManager.value = new GameManager(
         gameCanvas.value,
         selectedUsers.value,
-        { enableRecording: true } // 始终启用录制
+        { enableRecording: true, seed } // 始终启用录制
       );
 
       // 监听录制保存事件
@@ -821,6 +834,10 @@ onMounted(() => {
   align-items: center;
 }
 
+.seed-input {
+  width: 180px;
+}
+
 .selected-snakes-section {
   border: 2px solid rgba(74, 222, 128, 0.3);
   padding: 8px 10px;
@@ -968,6 +985,7 @@ onMounted(() => {
   align-items: center;
   flex: 1;
   max-width: calc(100% - 580px);
+  position: relative;
 }
 
 .game-control-buttons {
@@ -1002,6 +1020,18 @@ onMounted(() => {
   width: auto;
   max-width: 100%;
   object-fit: contain;
+}
+
+.seed-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  font-size: 10px;
+  padding: 6px 8px;
+  z-index: 2;
+  pointer-events: none;
 }
 
 /* 滚动条样式 */

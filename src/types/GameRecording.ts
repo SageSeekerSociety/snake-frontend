@@ -121,6 +121,8 @@ export interface GameRecording {
   timestamp: number;
   name: string;
   players: Player[];
+  seed?: string;
+  rngStreamId?: number;
   initialFrame?: GameRecordingFrame;
   frames: GameRecordingFrame[];
   totalTicks: number;

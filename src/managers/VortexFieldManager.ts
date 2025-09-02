@@ -12,6 +12,7 @@ import {
   PullVector,
   PositionCandidate,
 } from "../types/VortexField";
+import { Random } from "../utils/Random";
 
 /**
  * Manages the Vortex Field mechanism including lifecycle, position generation,
@@ -24,13 +25,15 @@ export class VortexFieldManager implements IScoreMultiplierProvider {
   private boxSize = GameConfig.CANVAS.BOX_SIZE;
   private mapWidth = GameConfig.CANVAS.COLUMNS * this.boxSize;
   private mapHeight = GameConfig.CANVAS.ROWS * this.boxSize;
+  private rng: Random;
 
-  constructor() {
+  constructor(rng: Random) {
     this.status = {
       state: VortexFieldState.INACTIVE,
       ticksRemaining: 0,
       currentTriggerProbability: this.config.INITIAL_TRIGGER_PROBABILITY,
     };
+    this.rng = rng;
   }
 
   /**
@@ -74,7 +77,7 @@ export class VortexFieldManager implements IScoreMultiplierProvider {
     }
 
     // Attempt to generate vortex field with current probability
-    if (Math.random() < this.status.currentTriggerProbability) {
+    if (this.rng.chance(this.status.currentTriggerProbability)) {
       const geometry = this.generateFairStrategicPosition();
       if (geometry) {
         // Successfully generated vortex field
@@ -268,7 +271,7 @@ export class VortexFieldManager implements IScoreMultiplierProvider {
   private getRandomActiveDuration(): number {
     const min = this.config.ACTIVE_DURATION_MIN;
     const max = this.config.ACTIVE_DURATION_MAX;
-    return min + Math.floor(Math.random() * (max - min + 1));
+    return this.rng.int(min, max);
   }
 
   /**

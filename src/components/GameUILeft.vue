@@ -1,5 +1,14 @@
 <template>
   <div class="game-ui-left">
+    <!-- 种子面板 -->
+    <div v-if="seed && seed.length > 0" class="seed-panel">
+      <div class="panel-header">
+        <div class="panel-title">本局种子</div>
+      </div>
+      <div class="seed-value" @click="copySeed" title="点击复制到剪贴板">
+        {{ seed }}
+      </div>
+    </div>
     <!-- 计时器面板 -->
     <div class="timer-panel">
       <div class="panel-header">
@@ -33,14 +42,34 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from "vue";
+import { ref, onMounted, onUnmounted, watch } from "vue";
 import { eventBus, GameEventType } from "../core/EventBus";
 import { parseSnakePlaceholders } from "../utils/snakeDisplayUtils";
 import { Snake } from "../entities/Snake";
 
+const props = defineProps<{ seed?: string }>();
+
 const notifications = ref<string[]>([]);
 const remainingTicks = ref<number>(256);
 const allSnakes = ref<Snake[]>([] as Snake[]);
+const seed = ref<string>(props.seed || "");
+
+// 同步外部传入的 seed 变更
+watch(
+  () => props.seed,
+  (val) => {
+    seed.value = val || "";
+  }
+);
+
+const copySeed = async () => {
+  try {
+    await navigator.clipboard.writeText(seed.value);
+    eventBus.emit(GameEventType.UI_NOTIFICATION, "已复制种子到剪贴板");
+  } catch (e) {
+    eventBus.emit(GameEventType.UI_NOTIFICATION, "复制失败，请手动复制");
+  }
+};
 
 // 添加通知
 const addNotification = (message: string) => {
@@ -133,6 +162,23 @@ onMounted(() => {
   overflow: hidden;
 }
 
+.seed-panel {
+  background-color: rgba(20, 20, 40, 0.8);
+  border: 4px solid var(--border-color);
+  border-radius: 4px;
+  box-shadow: 0 0 20px rgba(74, 222, 128, 0.1);
+  overflow: hidden;
+}
+
+.seed-value {
+  padding: 8px 10px;
+  font-size: 10px;
+  color: #fff;
+  word-break: break-all;
+  cursor: pointer;
+  text-align: center;
+}
+
 .timer-display {
   padding: 12px;
   font-size: 20px;
@@ -213,14 +259,6 @@ onMounted(() => {
   text-align: center;
   font-size: 8px;
   line-height: 1.5;
-}
-
-.panel-header {
-  background-color: var(--border-color);
-  padding: 8px;
-  display: flex;
-  justify-content: center;
-  position: relative;
 }
 
 .panel-title {

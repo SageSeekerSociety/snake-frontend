@@ -148,3 +148,11 @@
     font-size: 10px;
   }
 }
+
+.panel-header {
+  background-color: var(--border-color);
+  padding: 4px;
+  display: flex;
+  justify-content: center;
+  position: relative;
+}

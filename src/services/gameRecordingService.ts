@@ -53,6 +53,7 @@ export class GameRecordingService {
     players: Player[],
     totalTicks: number,
     initialGameState?: GameState,
+    meta?: { seed?: string; streamId?: number }
   ): void {
     if (this.isRecording) {
       console.warn("Already recording a game session");
@@ -68,6 +69,8 @@ export class GameRecordingService {
       timestamp,
       name,
       players,
+      seed: meta?.seed,
+      rngStreamId: meta?.streamId,
       frames: [],
       totalTicks,
       finalScores: []
@@ -291,6 +294,8 @@ export class GameRecordingService {
         timestamp: recording.timestamp,
         name: recording.name,
         players: this.cleanPlayers(recording.players),
+        ...(recording.seed ? { seed: recording.seed } : {}),
+        ...(typeof recording.rngStreamId === 'number' ? { rngStreamId: recording.rngStreamId } : {}),
         frames: this.cleanFrames(recording.frames),
         totalTicks: recording.totalTicks,
         finalScores: this.cleanScores(recording.finalScores)
