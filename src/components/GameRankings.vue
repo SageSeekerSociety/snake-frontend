@@ -26,6 +26,9 @@
       </div>
 
       <div class="button-container">
+        <button class="pixel-button copy-button" @click="copyResultsAsTable">
+          复制表格
+        </button>
         <button v-if="showSaveButton" class="pixel-button save-button" @click="saveRecording">
           保存录制
         </button>
@@ -68,6 +71,43 @@ const close = () => {
 const saveRecording = () => {
   emit('save-recording');
   showSaveButton.value = false; // 保存后隐藏按钮
+};
+
+// 复制表格到剪贴板
+const copyResultsAsTable = async () => {
+  try {
+    // 创建表格数据，按照要求格式：学号(username)、得分(score)、排名
+    const tableData = props.scores.map((player, index) => [
+      player.username,
+      player.score.toString(),
+      (index + 1).toString()
+    ]);
+
+    // 创建 TSV 格式（制表符分隔）
+    const tsv = tableData.map(row => row.join('\t')).join('\n');
+
+    // 创建 HTML 表格格式
+    const tableHTML = `<table>
+${tableData.map(row => 
+  `<tr>${row.map(cell => `<td>${cell}</td>`).join('')}</tr>`
+).join('\n')}
+</table>`;
+
+    // 创建多格式剪贴板数据
+    const htmlBlob = new Blob([tableHTML], { type: 'text/html' });
+    const textBlob = new Blob([tsv], { type: 'text/plain' });
+    const data = new ClipboardItem({
+      'text/html': htmlBlob,
+      'text/plain': textBlob
+    });
+
+    await navigator.clipboard.write([data]);
+    console.log('数据已作为表格成功复制');
+    // 这里可以添加UI反馈，比如短暂显示"复制成功"的提示
+  } catch (error) {
+    console.error('无法复制:', error);
+    // 这里可以添加错误提示
+  }
 };
 
 // 监听录制完成事件
@@ -345,7 +385,7 @@ onUnmounted(() => {
   justify-content: center;
 }
 
-.close-button, .save-button {
+.close-button, .save-button, .copy-button {
   padding: 10px 30px;
   font-size: 14px;
 }
@@ -357,6 +397,15 @@ onUnmounted(() => {
 
 .save-button:hover {
   background-color: #059669;
+}
+
+.copy-button {
+  background-color: #3b82f6;
+  border-color: #2563eb;
+}
+
+.copy-button:hover {
+  background-color: #2563eb;
 }
 
 @keyframes fadeIn {
