@@ -30,6 +30,13 @@ export class EntityManager implements IEntityQuery {
   private entityFactory: EntityFactory; // Add reference to EntityFactory
   private scoreMultiplierProvider?: IScoreMultiplierProvider; // Optional score multiplier provider
 
+  // --- Pathfinding cache (per-source within current world snapshot) ---
+  private spCache?: {
+    key: string; // fromX,fromY,bounds signature
+    bounds: SafeZoneBounds;
+    dist: Int32Array; // distances in grid cells (-1 unreachable)
+  };
+
   // Bound event handlers for proper cleanup
   private boundHandleSnakeDeathCleanup: (snake: Snake) => void;
   private boundHandleSnakeKillRequest: (data: {
@@ -383,6 +390,8 @@ export class EntityManager implements IEntityQuery {
    * Applies the decisions made and moves the snakes, updating the spatial grid.
    */
   applyDecisionsAndMoveSnakes(): void {
+    // World changes -> invalidate pathfinding cache
+    this.clearPathfindingCache();
     for (const snake of this.getLiveSnakes()) {
       const oldBody = [...snake.getBody()]; // Important: Copy body *before* moving
 
@@ -451,6 +460,8 @@ export class EntityManager implements IEntityQuery {
    * Clears all entities and resets the manager state.
    */
   clear(): void {
+    // Invalidate pathfinding cache
+    this.clearPathfindingCache();
     // Clean up all snake resources
     for (const snake of this.snakes) {
       // Clean up snake decision strategies
@@ -474,6 +485,161 @@ export class EntityManager implements IEntityQuery {
     // Clear spatial grid and entity ID mappings
     this.entityIds.clear();
     this.spatialGrid.clear();
+  }
+
+  // --- IEntityQuery optional: shortest path distance on grid ---
+  getShortestPathDistance(
+    fromCell: { x: number; y: number },
+    toCell: { x: number; y: number },
+    bounds: SafeZoneBounds
+  ): number {
+    // Validate within bounds
+    if (
+      fromCell.x < bounds.xMin ||
+      fromCell.x > bounds.xMax ||
+      fromCell.y < bounds.yMin ||
+      fromCell.y > bounds.yMax ||
+      toCell.x < bounds.xMin ||
+      toCell.x > bounds.xMax ||
+      toCell.y < bounds.yMin ||
+      toCell.y > bounds.yMax
+    ) {
+      return Infinity;
+    }
+
+    // Trivial case
+    if (fromCell.x === toCell.x && fromCell.y === toCell.y) {
+      return 0;
+    }
+
+    const cacheKey = `${fromCell.x},${fromCell.y},${bounds.xMin},${bounds.yMin},${bounds.xMax},${bounds.yMax}`;
+    let distField: Int32Array | undefined;
+
+    if (this.spCache && this.spCache.key === cacheKey) {
+      distField = this.spCache.dist;
+    } else {
+      // Build blocking grid and run BFS from source to fill distances
+      const dist = this.computeDistanceField(fromCell, bounds);
+      this.spCache = { key: cacheKey, bounds, dist };
+      distField = dist;
+    }
+
+    const width = bounds.xMax - bounds.xMin + 1;
+    const ty = toCell.y - bounds.yMin;
+    const tx = toCell.x - bounds.xMin;
+    const toIdx = ty * width + tx;
+    const d = distField[toIdx];
+    return d >= 0 ? d : Infinity;
+  }
+
+  // --- Internal helpers: pathfinding ---
+  private clearPathfindingCache(): void {
+    this.spCache = undefined;
+  }
+
+  private computeDistanceField(
+    fromCell: { x: number; y: number },
+    bounds: SafeZoneBounds
+  ): Int32Array {
+    const width = bounds.xMax - bounds.xMin + 1;
+    const height = bounds.yMax - bounds.yMin + 1;
+    const size = width * height;
+    const dist = new Int32Array(size);
+    for (let i = 0; i < size; i++) dist[i] = -1;
+
+    const blocked = this.buildBlockingGrid(bounds);
+
+    const sx = fromCell.x - bounds.xMin;
+    const sy = fromCell.y - bounds.yMin;
+    const startIdx = sy * width + sx;
+
+    const q = new Int32Array(size);
+    let qh = 0,
+      qt = 0;
+    q[qt++] = startIdx;
+    dist[startIdx] = 0;
+
+    const dirs = [1, -1, width, -width]; // right, left, down, up as index deltas
+
+    while (qh < qt) {
+      const cur = q[qh++];
+      const cd = dist[cur];
+      const cx = cur % width;
+      const cy = (cur / width) | 0;
+
+      // Explore neighbors
+      // Right
+      if (cx + 1 < width) {
+        const ni = cur + 1;
+        if (dist[ni] === -1 && blocked[ni] === 0) {
+          dist[ni] = cd + 1;
+          q[qt++] = ni;
+        }
+      }
+      // Left
+      if (cx - 1 >= 0) {
+        const ni = cur - 1;
+        if (dist[ni] === -1 && blocked[ni] === 0) {
+          dist[ni] = cd + 1;
+          q[qt++] = ni;
+        }
+      }
+      // Down
+      if (cy + 1 < height) {
+        const ni = cur + width;
+        if (dist[ni] === -1 && blocked[ni] === 0) {
+          dist[ni] = cd + 1;
+          q[qt++] = ni;
+        }
+      }
+      // Up
+      if (cy - 1 >= 0) {
+        const ni = cur - width;
+        if (dist[ni] === -1 && blocked[ni] === 0) {
+          dist[ni] = cd + 1;
+          q[qt++] = ni;
+        }
+      }
+    }
+
+    return dist;
+  }
+
+  private buildBlockingGrid(bounds: SafeZoneBounds): Uint8Array {
+    const width = bounds.xMax - bounds.xMin + 1;
+    const height = bounds.yMax - bounds.yMin + 1;
+    const size = width * height;
+    const blocked = new Uint8Array(size); // 0 = free, 1 = blocked
+    const box = GameConfig.CANVAS.BOX_SIZE;
+
+    const mark = (gx: number, gy: number) => {
+      if (
+        gx >= bounds.xMin &&
+        gx <= bounds.xMax &&
+        gy >= bounds.yMin &&
+        gy <= bounds.yMax
+      ) {
+        const x = gx - bounds.xMin;
+        const y = gy - bounds.yMin;
+        blocked[y * width + x] = 1;
+      }
+    };
+
+    // Obstacles
+    for (const o of this.obstacles) {
+      const p = o.getPosition();
+      mark((p.x / box) | 0, (p.y / box) | 0);
+    }
+
+    // Snakes (all segments)
+    for (const s of this.snakes) {
+      for (const seg of s.getBody()) {
+        mark((seg.x / box) | 0, (seg.y / box) | 0);
+      }
+    }
+
+    // Note: keys, food, and treasure chests are NOT blocking for movement
+    return blocked;
   }
 
   /**

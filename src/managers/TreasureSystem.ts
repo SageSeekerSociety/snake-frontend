@@ -120,9 +120,9 @@ export class TreasureSystem {
       maxFairnessAttempts: config?.maxFairnessAttempts ?? 10,
 
       distanceModeFairness:
-        config?.distanceModeFairness ?? DistanceMode.MANHATTAN,
+        config?.distanceModeFairness ?? DistanceMode.SHORTEST_PATH,
       distanceModeScoring:
-        config?.distanceModeScoring ?? DistanceMode.MANHATTAN,
+        config?.distanceModeScoring ?? DistanceMode.SHORTEST_PATH,
       scoringWeights: config?.scoringWeights ?? { w1: 1.0, w2: 0.15, w3: 0.05 },
       topKChestCandidates: config?.topKChestCandidates ?? 5,
       replacementTimeHorizon: config?.replacementTimeHorizon ?? 10,

@@ -1,6 +1,7 @@
 import { Key } from "../entities/Key";
 import { Snake } from "../entities/Snake";
 import { Position } from "../types/Position";
+import { SafeZoneBounds } from "../types/GameState";
 
 /**
  * Interface for querying entities in the game world.
@@ -24,6 +25,17 @@ export interface IEntityQuery {
   isPositionOccupied(position: Position, typesToCheck: string[]): boolean;
 
   getAllKeys(): Key[];
+
+  /**
+   * Optional: compute the shortest path distance (4-neighborhood, grid cells)
+   * between two grid cells within given safe zone bounds. Returns Infinity if unreachable.
+   * Coordinates are in grid units (not pixels).
+   */
+  getShortestPathDistance?(
+    fromCell: { x: number; y: number },
+    toCell: { x: number; y: number },
+    bounds: SafeZoneBounds
+  ): number;
 }
 
 /**
