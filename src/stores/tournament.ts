@@ -243,10 +243,14 @@ class TournamentStore {
       throw new Error('没有参赛选手');
     }
 
-    // 检查参赛人数是否符合要求
-    const requiredTotal = options.groupCount * options.groupSize;
-    if (participants.length !== requiredTotal) {
-      throw new Error(`参赛人数(${participants.length})不符合分组要求(${requiredTotal})`);
+    // 计算分配策略
+    const hasFixedSize = typeof options.groupSize === 'number' && options.groupSize! > 0;
+    if (hasFixedSize) {
+      // 固定每组人数时，严格校验总人数
+      const requiredTotal = options.groupCount * (options.groupSize as number);
+      if (participants.length !== requiredTotal) {
+        throw new Error(`参赛人数(${participants.length})不符合分组要求(${requiredTotal})`);
+      }
     }
 
     // 随机打乱参赛选手
@@ -256,21 +260,41 @@ class TournamentStore {
 
     // 分组
     const groups: Group[] = [];
-    for (let i = 0; i < options.groupCount; i++) {
-      const groupParticipants = participants.slice(
-        i * options.groupSize, 
-        (i + 1) * options.groupSize
-      );
-
-      groups.push({
-        id: uuidv4(),
-        name: `第${i + 1}组`,
-        participants: groupParticipants,
-        matches: [],
-        standings: [],
-        status: 'pending',
-        currentRound: 0
-      });
+    if (hasFixedSize) {
+      const size = options.groupSize as number;
+      for (let i = 0; i < options.groupCount; i++) {
+        const groupParticipants = participants.slice(i * size, (i + 1) * size);
+        groups.push({
+          id: uuidv4(),
+          name: `第${i + 1}组`,
+          participants: groupParticipants,
+          matches: [],
+          standings: [],
+          status: 'pending',
+          currentRound: 0
+        });
+      }
+    } else {
+      // 按组数均匀分配：前 remainder 组 base+1 人，其余 base 人
+      const g = Math.max(1, options.groupCount);
+      const total = participants.length;
+      const base = Math.floor(total / g);
+      const remainder = total % g; // 有 remainder 组需要加 1 人
+      let index = 0;
+      for (let i = 0; i < g; i++) {
+        const size = i < remainder ? base + 1 : base;
+        const groupParticipants = participants.slice(index, index + size);
+        index += size;
+        groups.push({
+          id: uuidv4(),
+          name: `第${i + 1}组`,
+          participants: groupParticipants,
+          matches: [],
+          standings: [],
+          status: 'pending',
+          currentRound: 0
+        });
+      }
     }
 
     // 更新小组赛阶段
@@ -281,7 +305,15 @@ class TournamentStore {
     }
 
     this.persistToStorage();
-    console.log(`已完成分组：${options.groupCount}组，每组${options.groupSize}人`);
+    if (hasFixedSize) {
+      console.log(`已完成分组：${options.groupCount} 组，每组 ${options.groupSize} 人`);
+    } else {
+      const g = Math.max(1, options.groupCount);
+      const total = participants.length;
+      const base = Math.floor(total / g);
+      const remainder = total % g;
+      console.log(`已完成分组：${g} 组，均分 ${total} 人（${remainder} 组 ${base + 1} 人，其余 ${g - remainder} 组 ${base} 人）`);
+    }
   }
 
   /**
@@ -323,6 +355,20 @@ class TournamentStore {
 
     this.persistToStorage();
     console.log(`已将选手从${sourceGroup.name}移动到${targetGroup.name}`);
+  }
+
+  /**
+   * 清空指定阶段的小组
+   */
+  clearGrouping(stageId: string = 'group_stage'): void {
+    const stage = state.tournament.stages[stageId];
+    if (!stage) {
+      throw new Error(`找不到阶段: ${stageId}`);
+    }
+    stage.groups = [];
+    stage.status = 'pending';
+    this.persistToStorage();
+    console.log(`已清空阶段 ${stage.name} 的分组`);
   }
 
   /**

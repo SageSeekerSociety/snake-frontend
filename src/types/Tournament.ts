@@ -105,7 +105,12 @@ export interface ImportedParticipant {
 export interface GroupingOptions {
   method: 'random' | 'manual' | 'balanced';
   groupCount: number;
-  groupSize: number;
+  /**
+   * 固定每组人数（可选）。
+   * 如果未提供，则按照 groupCount 对总人数进行均匀分配：
+   * 前 remainder 组为 base+1 人，其余为 base 人。
+   */
+  groupSize?: number;
   seed?: number;  // 随机种子
 }
 

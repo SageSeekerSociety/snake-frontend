@@ -1,8 +1,60 @@
 import * as XLSX from 'xlsx';
-import { TournamentState, ParticipantStanding, Participant, MatchRecord } from '../types/Tournament';
+import { TournamentState, ParticipantStanding, Participant, MatchRecord, Group } from '../types/Tournament';
 import { TournamentConfig } from './tournamentConfigLoader';
 
 export class ExcelExportService {
+  /**
+   * 导出分组结果到Excel
+   */
+  static exportGrouping(groups: Group[], tournamentName: string): void {
+    const wb = XLSX.utils.book_new();
+
+    // 总览工作表
+    const summaryData: any[][] = [
+      [`${tournamentName} - 分组总览`],
+      [],
+      ['组名', '人数'],
+    ];
+    let total = 0;
+    groups.forEach(g => {
+      const size = g.participants.length;
+      total += size;
+      summaryData.push([g.name, size]);
+    });
+    summaryData.push([]);
+    summaryData.push(['总计参赛人数', total]);
+    const summaryWs = XLSX.utils.aoa_to_sheet(summaryData);
+    summaryWs['!cols'] = [
+      { width: 18 }, // 组名
+      { width: 10 }, // 人数
+    ];
+    XLSX.utils.book_append_sheet(wb, summaryWs, '分组总览');
+
+    // 每组一个工作表
+    groups.forEach(group => {
+      const data: any[][] = [
+        [`${group.name}（${group.participants.length}人）`],
+        [],
+        ['序号', '学号', '姓名'],
+      ];
+      group.participants.forEach((p, idx) => {
+        data.push([idx + 1, p.username, p.nickname]);
+      });
+      const ws = XLSX.utils.aoa_to_sheet(data);
+      ws['!cols'] = [
+        { width: 6 },   // 序号
+        { width: 16 },  // 学号
+        { width: 18 },  // 姓名
+      ];
+      // 安全的Sheet名
+      const sheetName = (group.name || '分组').replace(/[*?:\/\\\[\]]/g, '').slice(0, 31) || '分组';
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+    });
+
+    const timestamp = new Date().toISOString().split('T')[0];
+    const filename = `${tournamentName}-分组结果-${timestamp}.xlsx`;
+    XLSX.writeFile(wb, filename);
+  }
   /**
    * 导出完整赛事结果到Excel
    */

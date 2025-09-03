@@ -17,30 +17,47 @@
       </div>
 
       <!-- 从学号列表导入 -->
-      <div v-if="currentImportTab === 'username_list'" class="import-section">
-        <div class="upload-area">
-          <div class="upload-instruction">
-            <p>请输入参赛选手的学号，每行一个：</p>
-          </div>
-          
-          <textarea
-            v-model="usernameListInput"
-            class="username-textarea"
-            placeholder="202101001&#10;202101002&#10;202101003&#10;..."
-            rows="10"
-          ></textarea>
-          
-          <div class="upload-actions">
-            <button @click="importFromUsernameList" class="pixel-button import-button" :disabled="loading || !usernameListInput.trim()">
-              <span v-if="loading">导入中...</span>
-              <span v-else>导入选手 ({{ parsedUsernames.length }})</span>
-            </button>
-            <button @click="clearUsernameList" class="pixel-button clear-button">
-              清空
-            </button>
-          </div>
+  <div v-if="currentImportTab === 'username_list'" class="import-section">
+    <div class="upload-area">
+      <div class="upload-instruction">
+        <p>请输入参赛选手的学号，每行一个：</p>
+      </div>
+      
+      <textarea
+        v-model="usernameListInput"
+        class="username-textarea"
+        placeholder="202101001&#10;202101002&#10;202101003&#10;..."
+        rows="10"
+      ></textarea>
+      
+      <div class="upload-actions">
+        <button @click="importFromUsernameList" class="pixel-button import-button" :disabled="loading || !usernameListInput.trim()">
+          <span v-if="loading">导入中...</span>
+          <span v-else>导入选手 ({{ parsedUsernames.length }})</span>
+        </button>
+        <button @click="clearUsernameList" class="pixel-button clear-button">
+          清空
+        </button>
+      </div>
+
+      <!-- 导入结果提示 -->
+      <div v-if="lastImportResult" class="result-message" :class="{ warning: lastImportResult.notFound.length > 0 }">
+        <div class="result-title">
+          成功导入 {{ lastImportResult.successCount }} 名选手
+          <template v-if="lastImportResult.notFound.length > 0">
+            ，未找到 {{ lastImportResult.notFound.length }} 个学号：
+          </template>
+        </div>
+        <div v-if="lastImportResult.notFound.length > 0" class="missing-list">
+          <code v-for="id in lastImportResult.notFound" :key="id" class="missing-chip">{{ id }}</code>
+        </div>
+        <div v-if="lastImportResult.notFound.length > 0" class="result-actions">
+          <button class="pixel-button copy-button" @click="copyNotFoundList">复制未找到名单</button>
+          <button class="pixel-button refill-button" @click="refillNotFoundToTextarea">回填到输入框</button>
         </div>
       </div>
+    </div>
+  </div>
 
       <!-- 从活跃用户选择 -->
       <div v-if="currentImportTab === 'active_users'" class="import-section">
@@ -156,6 +173,7 @@ const currentImportTab = ref('username_list');
 const loading = ref(false);
 const loadingUsers = ref(false);
 const error = ref<string | null>(null);
+const lastImportResult = ref<{ successCount: number; notFound: string[] } | null>(null);
 
 // 学号列表导入
 const usernameListInput = ref('');
@@ -223,13 +241,12 @@ const importFromUsernameList = async () => {
     }
 
     // 显示导入结果
-    let message = `成功导入 ${importedParticipants.length} 名选手`;
-    if (notFoundUsernames.length > 0) {
-      message += `，未找到 ${notFoundUsernames.length} 名选手：${notFoundUsernames.slice(0, 5).join(', ')}${notFoundUsernames.length > 5 ? '...' : ''}`;
-    }
-    
-    console.log(message);
-    usernameListInput.value = ''; // 清空输入
+    lastImportResult.value = { successCount: importedParticipants.length, notFound: notFoundUsernames };
+    console.log(
+      `成功导入 ${importedParticipants.length} 名选手` +
+      (notFoundUsernames.length > 0 ? `，未找到 ${notFoundUsernames.length} 个学号` : '')
+    );
+    usernameListInput.value = '';
     
   } catch (err) {
     error.value = err instanceof Error ? err.message : '导入失败';
@@ -242,6 +259,7 @@ const importFromUsernameList = async () => {
 const clearUsernameList = () => {
   usernameListInput.value = '';
   clearError();
+  lastImportResult.value = null;
 };
 
 // 加载活跃用户
@@ -322,29 +340,42 @@ const clearAllParticipants = () => {
 // 导出参赛选手名单
 const exportParticipantsList = () => {
   // 动态导入Excel导出服务
-  import('../../services/excelExportService').then(({ ExcelExportService }) => {
-    ExcelExportService.exportParticipantsList(props.participants, '蛇王争霸赛');
-  }).catch(error => {
-    console.error('导出失败:', error);
-    // 备用方案：导出文本文件
-    const content = props.participants
-      .map(p => `${p.username}\t${p.nickname}`)
-      .join('\n');
-    
-    const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = '参赛选手名单.txt';
-    a.click();
-    URL.revokeObjectURL(url);
-  });
+  import('../../services/excelExportService')
+    .then(({ ExcelExportService }) => {
+      ExcelExportService.exportParticipantsList(props.participants, '蛇王争霸赛');
+    })
+    .catch(error => {
+      console.error('Excel导出失败:', error);
+      alert('导出失败，请重试');
+    });
 };
 
 // 组件挂载时加载活跃用户
 onMounted(() => {
   loadActiveUsers();
 });
+
+// 复制未找到学号列表
+const copyNotFoundList = async () => {
+  if (!lastImportResult.value || lastImportResult.value.notFound.length === 0) return;
+  const text = lastImportResult.value.notFound.join('\n');
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch {
+    const textarea = document.createElement('textarea');
+    textarea.value = text;
+    document.body.appendChild(textarea);
+    textarea.select();
+    document.execCommand('copy');
+    document.body.removeChild(textarea);
+  }
+};
+
+// 回填未找到学号到输入框
+const refillNotFoundToTextarea = () => {
+  if (!lastImportResult.value || lastImportResult.value.notFound.length === 0) return;
+  usernameListInput.value = lastImportResult.value.notFound.join('\n');
+};
 </script>
 
 <style scoped>
@@ -424,6 +455,62 @@ onMounted(() => {
   display: flex;
   gap: 10px;
   justify-content: flex-end;
+}
+
+.result-message {
+  margin-top: 14px;
+  padding: 12px;
+  background-color: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.3);
+  border-radius: 6px;
+  color: var(--text-color);
+}
+
+.result-message.warning {
+  background-color: rgba(245, 158, 11, 0.08);
+  border-color: rgba(245, 158, 11, 0.35);
+}
+
+.result-title {
+  font-size: 12px;
+  margin-bottom: 8px;
+  color: var(--text-color);
+}
+
+.missing-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  max-height: 120px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.missing-chip {
+  display: inline-block;
+  padding: 4px 6px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  font-family: monospace;
+  font-size: 12px;
+  color: var(--text-color);
+}
+
+.result-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.copy-button {
+  background-color: rgba(156, 163, 175, 0.85);
+  color: white;
+}
+
+.refill-button {
+  background-color: rgba(59, 130, 246, 0.85);
+  color: white;
 }
 
 .active-users-section {

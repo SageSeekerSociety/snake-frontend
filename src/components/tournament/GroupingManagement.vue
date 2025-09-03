@@ -20,6 +20,13 @@
               >
             </div>
             <div class="config-item">
+              <label>分配策略</label>
+              <select v-model="autoDistributeMode" class="config-input" :disabled="hasExistingGroups">
+                <option value="balanced">仅设组数，自动均分</option>
+                <option value="fixed">固定每组人数</option>
+              </select>
+            </div>
+            <div class="config-item">
               <label>每组人数</label>
               <input 
                 v-model.number="groupingOptions.groupSize" 
@@ -27,7 +34,7 @@
                 min="1" 
                 max="50"
                 class="config-input"
-                :disabled="hasExistingGroups"
+                :disabled="hasExistingGroups || autoDistributeMode === 'balanced'"
               >
             </div>
             <div class="config-item">
@@ -56,11 +63,13 @@
             <span class="info-label">参赛总人数:</span>
             <span class="info-value">{{ participants.length }}</span>
           </div>
-          <div class="info-item">
+          <div class="info-item" v-if="autoDistributeMode === 'fixed'">
             <span class="info-label">需要人数:</span>
-            <span class="info-value" :class="{ 'error': !isParticipantCountValid }">
-              {{ requiredParticipants }}
-            </span>
+            <span class="info-value" :class="{ 'error': !isParticipantCountValid }">{{ requiredParticipants }}</span>
+          </div>
+          <div class="info-item" v-else>
+            <span class="info-label">均分方案:</span>
+            <span class="info-value">{{ balancedPlanText }}</span>
           </div>
           <div class="info-item">
             <span class="info-label">状态:</span>
@@ -115,6 +124,7 @@
                 class="participant-item"
                 draggable="true"
                 @dragstart="onDragStart(participant, group.id)"
+                @dragend="onDragEnd"
                 @dragover.prevent
                 @drop="onDrop($event, group.id)"
               >
@@ -132,7 +142,7 @@
               @dragover.prevent
               @dragenter.prevent
               @drop="onDrop($event, group.id)"
-              v-show="draggedParticipant"
+              v-show="draggedParticipant && draggedParticipant.sourceGroupId !== group.id"
             >
               拖放选手到此组
             </div>
@@ -149,7 +159,7 @@
           <button @click="exportGrouping" class="pixel-button export-button">
             导出分组
           </button>
-          <button @click="confirmGrouping" class="pixel-button confirm-button">
+          <button v-if="!props.hideConfirmButton" @click="confirmGrouping" class="pixel-button confirm-button">
             确认分组并开始比赛
           </button>
         </div>
@@ -173,6 +183,8 @@ const props = defineProps<{
   participants: Participant[];
   groups: Group[];
   config: TournamentConfig | null;
+  /** 当为 true 时，隐藏底部的“确认分组并开始比赛”按钮，交由外部页面处理确认流程 */
+  hideConfirmButton?: boolean;
 }>();
 
 const emit = defineEmits<{
@@ -182,6 +194,7 @@ const emit = defineEmits<{
 // 状态管理
 const loading = ref(false);
 const error = ref<string | null>(null);
+const autoDistributeMode = ref<'balanced' | 'fixed'>('balanced');
 
 // 分组选项
 const groupingOptions = ref<GroupingOptions>({
@@ -196,10 +209,13 @@ const draggedParticipant = ref<{ participant: Participant, sourceGroupId: string
 
 // 计算属性
 const requiredParticipants = computed(() => {
-  return groupingOptions.value.groupCount * groupingOptions.value.groupSize;
+  return groupingOptions.value.groupCount * (groupingOptions.value.groupSize || 0);
 });
 
 const isParticipantCountValid = computed(() => {
+  if (autoDistributeMode.value === 'balanced') {
+    return props.participants.length > 0 && groupingOptions.value.groupCount > 0;
+  }
   return props.participants.length === requiredParticipants.value;
 });
 
@@ -215,9 +231,22 @@ const canPerformGrouping = computed(() => {
   return isParticipantCountValid.value && !loading.value;
 });
 
+const balancedPlanText = computed(() => {
+  const total = props.participants.length;
+  const g = Math.max(1, groupingOptions.value.groupCount || 1);
+  if (total === 0) return `等待导入参赛选手`;
+  const base = Math.floor(total / g);
+  const remainder = total % g;
+  if (remainder === 0) return `每组 ${base} 人`;
+  return `前 ${remainder} 组 ${base + 1} 人，其余 ${g - remainder} 组 ${base} 人`;
+});
+
 const statusText = computed(() => {
   if (props.participants.length === 0) return '无参赛选手';
   if (!isParticipantCountValid.value) {
+    if (autoDistributeMode.value === 'balanced') {
+      return '可均分，点击开始分组';
+    }
     if (props.participants.length < requiredParticipants.value) {
       return `还需 ${requiredParticipants.value - props.participants.length} 人`;
     } else {
@@ -230,7 +259,7 @@ const statusText = computed(() => {
 
 const statusClass = computed(() => {
   if (props.participants.length === 0) return 'warning';
-  if (!isParticipantCountValid.value) return 'error';
+  if (!isParticipantCountValid.value) return autoDistributeMode.value === 'balanced' ? 'ready' : 'error';
   if (hasExistingGroups.value) return 'success';
   return 'ready';
 });
@@ -257,12 +286,17 @@ const performGrouping = async () => {
   clearError();
 
   try {
-    // 如果没有设置种子，使用当前时间
-    if (!groupingOptions.value.seed) {
-      groupingOptions.value.seed = Date.now();
+    const seedToUse = groupingOptions.value.seed ?? Date.now();
+    const optionsToSend: GroupingOptions = {
+      method: groupingOptions.value.method,
+      groupCount: groupingOptions.value.groupCount,
+      seed: seedToUse
+    };
+    if (autoDistributeMode.value === 'fixed') {
+      optionsToSend.groupSize = groupingOptions.value.groupSize;
     }
 
-    await tournamentStore.performGrouping(groupingOptions.value);
+    await tournamentStore.performGrouping(optionsToSend);
     emit('grouping-completed');
     
     console.log('分组完成');
@@ -278,22 +312,20 @@ const clearGrouping = async () => {
   if (!confirm('确定要清空当前分组吗？')) return;
 
   try {
-    // 重置小组赛阶段的groups
-    const groupStage = tournamentStore.getState().tournament.stages.group_stage;
-    if (groupStage) {
-      groupStage.groups = [];
-      groupStage.status = 'pending';
-    }
-    
+    tournamentStore.clearGrouping('group_stage');
     console.log('分组已清空');
   } catch (err) {
     error.value = err instanceof Error ? err.message : '清空分组失败';
   }
 };
 
-// 拖拽开始
+// 拖拽开始/结束
 const onDragStart = (participant: Participant, sourceGroupId: string) => {
   draggedParticipant.value = { participant, sourceGroupId };
+};
+
+const onDragEnd = () => {
+  draggedParticipant.value = null;
 };
 
 // 拖拽结束
@@ -322,23 +354,16 @@ const onDrop = async (event: DragEvent, targetGroupId: string) => {
 
 // 导出分组
 const exportGrouping = () => {
-  let content = '分组结果\n\n';
-  
-  props.groups.forEach((group, index) => {
-    content += `=== ${group.name} (${group.participants.length}人) ===\n`;
-    group.participants.forEach((participant, pIndex) => {
-      content += `${pIndex + 1}. ${participant.username} (${participant.nickname})\n`;
+  // 动态导入Excel导出服务，导出分组为xlsx（不再提供文本兜底）
+  import('../../services/excelExportService')
+    .then(({ ExcelExportService }) => {
+      const t = tournamentStore.getState().tournament;
+      ExcelExportService.exportGrouping(props.groups, t.name || '赛事');
+    })
+    .catch(error => {
+      console.error('Excel导出失败:', error);
+      alert('导出失败，请重试');
     });
-    content += '\n';
-  });
-  
-  const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = '分组结果.txt';
-  a.click();
-  URL.revokeObjectURL(url);
 };
 
 // 确认分组并开始比赛
