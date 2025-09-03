@@ -55,17 +55,19 @@ export class GameManager {
   private recordingEnabled: boolean = false;
   private rng: Random;
   private gameSeed: string;
+  private recordingName?: string;
 
   constructor(
     canvas: HTMLCanvasElement,
     selectedUsers: Player[] = [], // Pass selected users during construction
-    options: { enableRecording?: boolean; seed?: number | string; streamId?: number } = {}
+    options: { enableRecording?: boolean; seed?: number | string; streamId?: number; recordingName?: string } = {}
   ) {
     this.selectedUsers = selectedUsers;
     this.recordingEnabled = options.enableRecording || false;
     const seedInput = options.seed ?? 42;
     this.rng = new Random(seedInput, options.streamId ?? 54);
     this.gameSeed = typeof seedInput === 'string' ? seedInput : String(seedInput);
+    this.recordingName = options.recordingName;
 
     // Initialize core components
     this.canvasManager = new CanvasManager(canvas);
@@ -276,7 +278,7 @@ export class GameManager {
         this.selectedUsers,
         this.gameClock.getTotalTicks(),
         initialGameState,
-        { seed: this.gameSeed }
+        { seed: this.gameSeed, name: this.recordingName }
       );
       this.isRecording = true;
     } catch (error) {

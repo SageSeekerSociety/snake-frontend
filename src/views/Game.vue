@@ -190,6 +190,7 @@ import { GameConfig } from "../config/GameConfig";
 const props = defineProps<{
   tournamentMode?: boolean;
   selectedUsers?: Player[];
+  recordingName?: string;
 }>();
 
 // 组件emits
@@ -435,7 +436,7 @@ const playAgain = () => {
       gameManager.value = new GameManager(
         gameCanvas.value,
         selectedUsers.value,
-        { enableRecording: true, seed } // 始终启用录制
+        { enableRecording: true, seed, recordingName: props.recordingName }
       );
 
       // 监听录制保存事件
@@ -486,7 +487,7 @@ const startGameWithSelectedUsers = () => {
       gameManager.value = new GameManager(
         gameCanvas.value,
         selectedUsers.value,
-        { enableRecording: true, seed } // 始终启用录制
+        { enableRecording: true, seed, recordingName: props.recordingName }
       );
 
       // 监听录制保存事件
@@ -512,12 +513,20 @@ const startGameWithSelectedUsers = () => {
 };
 
 // 处理最终得分显示
-const handleFinalScores = (scores: FinalScore[]) => {
+const handleFinalScores = async (scores: FinalScore[]) => {
   console.log("Received final scores:", scores);
   finalScores.value = scores;
   
   // 如果是赛事模式，向父组件发送结果并且不显示排名弹窗
   if (props.tournamentMode) {
+    // 比赛模式：先保存录像，再上报结果，避免组件卸载导致录制被丢弃
+    try {
+      if (gameManager.value) {
+        await gameManager.value.saveCurrentRecording();
+      }
+    } catch (e) {
+      console.error('Auto-save recording failed:', e);
+    }
     emit('game-ended', scores);
     
     // // 赛事模式下向localStorage报告结果

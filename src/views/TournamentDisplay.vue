@@ -192,10 +192,11 @@
         </div>
       </div>
 
-      <div class="countdown-container">
-        <div class="countdown-text">比赛将在</div>
-        <div class="countdown-timer">{{ countdown }}</div>
-        <div class="countdown-text">秒后开始</div>
+      <div class="manual-start-container">
+        <div class="manual-start-text">参赛名单已就绪</div>
+        <button class="pixel-button manual-start-button" @click="startGame">
+          开始对局
+        </button>
       </div>
     </div>
 
@@ -216,6 +217,7 @@
           ref="gameComponent"
           :tournament-mode="true"
           :selected-users="selectedUsers"
+          :recording-name="tournamentRecordingName"
           @game-ended="handleGameEnded"
         />
       </div>
@@ -339,6 +341,8 @@ const gameResults = ref<
 
 // Game组件引用
 const gameComponent = ref<InstanceType<typeof Game> | null>(null);
+// 当前局录像名（在点击开始时锁定）
+const tournamentRecordingName = ref<string>("")
 
 // 计算属性
 const tournament = computed(() => tournamentStore.getState().tournament);
@@ -786,23 +790,24 @@ const handleMatchCommand = (command: any) => {
 const startMatchSequence = async () => {
   if (!currentMatch.value) return;
 
-  // 1. 进入准备阶段，显示参赛名单
+  // 进入准备阶段，显示参赛名单，等待手动开始
   displayState.value = "preparing";
   isConnected.value = true;
-
-  // 2. 倒计时
-  countdown.value = 5;
-  const countdownInterval = setInterval(() => {
-    countdown.value--;
-    if (countdown.value <= 0) {
-      clearInterval(countdownInterval);
-      startGame();
-    }
-  }, 1000);
+  countdown.value = 5; // 保留变量但不再自动倒计时
 };
 
 // 开始游戏
 const startGame = async () => {
+  // 在进入gaming前生成录像名
+  try {
+    const nowStr = new Date().toLocaleString('zh-CN');
+    const groupOrStage = currentMatch.value?.groupName || getCurrentStageInfo().name || '比赛';
+    const round = currentMatch.value?.roundNumber ? `第${currentMatch.value.roundNumber}轮` : '';
+    tournamentRecordingName.value = `${groupOrStage} ${round} ${nowStr}`.trim();
+  } catch (e) {
+    tournamentRecordingName.value = '';
+  }
+
   displayState.value = "gaming";
 
   // 等待DOM更新
@@ -1356,6 +1361,25 @@ onUnmounted(() => {
   color: var(--accent-color);
   text-shadow: 3px 3px 0px rgba(0, 0, 0, 0.5);
   animation: pixelPulse 1s infinite;
+}
+
+.manual-start-container {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin-top: 30px;
+}
+
+.manual-start-text {
+  color: var(--text-color);
+  font-size: 16px;
+}
+
+.manual-start-button {
+  padding: 10px 18px;
+  font-size: 14px;
+  background-color: var(--button-color);
 }
 
 @keyframes pixelPulse {

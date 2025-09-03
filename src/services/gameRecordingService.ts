@@ -53,7 +53,7 @@ export class GameRecordingService {
     players: Player[],
     totalTicks: number,
     initialGameState?: GameState,
-    meta?: { seed?: string; streamId?: number }
+    meta?: { seed?: string; streamId?: number; name?: string }
   ): void {
     if (this.isRecording) {
       console.warn("Already recording a game session");
@@ -62,7 +62,19 @@ export class GameRecordingService {
 
     const id = crypto.randomUUID();
     const timestamp = Date.now();
-    const name = `Game ${new Date(timestamp).toLocaleString()}`;
+
+    // Build a more descriptive default name if none provided
+    const formatTs = (t: number) => {
+      const d = new Date(t);
+      const pad = (n: number) => n.toString().padStart(2, '0');
+      return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+    };
+    const playerNames = players.map(p => (p.nickname || p.username || '').trim()).filter(Boolean);
+    const shown = playerNames.slice(0, 4).join(', ');
+    const extra = playerNames.length > 4 ? ` +${playerNames.length - 4}` : '';
+    const seedPart = meta?.seed ? ` • seed ${meta.seed}` : '';
+    const defaultName = `${formatTs(timestamp)}${seedPart} • ${players.length}P • ${shown}${extra}`;
+    const name = meta?.name?.trim() || defaultName;
 
     this.recording = {
       id,
