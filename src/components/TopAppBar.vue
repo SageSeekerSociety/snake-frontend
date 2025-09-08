@@ -4,7 +4,7 @@
       <div class="app-bar-left">
         <div class="app-bar-logo">
           <router-link to="/" class="logo-link">
-            <span class="logo-text">蛇王争霸</span>
+            <span class="logo-text" @click.stop.prevent="onLogoTap">蛇王争霸</span>
           </router-link>
         </div>
 
@@ -28,6 +28,15 @@
       </div>
 
       <div class="app-bar-user">
+        <button
+          v-if="showExport"
+          class="export-zip-button"
+          :disabled="exporting"
+          @click="downloadLatestSources"
+          title="导出最新源码Zip"
+        >
+          {{ exporting ? '导出中…' : '导出源码' }}
+        </button>
         <template v-if="isAuthenticated">
           <div class="user-info">
             <router-link to="/profile" class="user-profile-link" title="编辑个人资料">
@@ -55,7 +64,8 @@
 import { computed, ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { useAuth } from '../stores/auth';
-import { avatarService } from '../services/api';
+import { avatarService, sandboxService } from '../services/api';
+import { RateLimitError } from '../types/RateLimitError';
 
 const route = useRoute();
 const router = useRouter();
@@ -105,6 +115,12 @@ const getAvatarUrl = (avatarId: number) => {
 // 在组件挂载时获取默认头像ID
 onMounted(() => {
   fetchDefaultAvatarId();
+  // 读取隐藏入口解锁状态
+  try {
+    if (localStorage.getItem('exportUnlocked') === '1') {
+      showExport.value = true;
+    }
+  } catch {}
 });
 
 // 生成头像颜色（用于没有头像时的占位符）
@@ -129,6 +145,53 @@ const getAvatarColor = (avatarId: number) => {
 const handleLogout = async () => {
   await logout();
   router.push('/login');
+};
+
+// 隐藏入口：连续点击 Logo 若干次显示导出按钮
+const tapCount = ref(0);
+const showExport = ref(false);
+const exporting = ref(false);
+let tapResetTimer: number | undefined;
+
+const onLogoTap = () => {
+  tapCount.value += 1;
+  // 3 秒不再点击则重置计数，避免误触
+  if (tapResetTimer) window.clearTimeout(tapResetTimer);
+  tapResetTimer = window.setTimeout(() => (tapCount.value = 0), 3000);
+
+  if (tapCount.value >= 7) {
+    showExport.value = true;
+    try { localStorage.setItem('exportUnlocked', '1'); } catch {}
+  }
+};
+
+const downloadLatestSources = async () => {
+  if (exporting.value) return;
+  exporting.value = true;
+  try {
+    const { blob, filename } = await sandboxService.downloadLatestSourcesZip();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename || 'latest-sources.zip';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (err: any) {
+    if (err instanceof RateLimitError) {
+      const wait = err.retryAfterSeconds ? ` 请在 ${err.retryAfterSeconds}s 后重试。` : '';
+      alert('导出频率过高。' + wait);
+    } else if (err?.response?.status === 401) {
+      alert('未授权或登录已过期，请重新登录。');
+      router.push('/login');
+    } else {
+      console.error('导出失败:', err);
+      alert('导出失败，请稍后重试。');
+    }
+  } finally {
+    exporting.value = false;
+  }
 };
 </script>
 
@@ -208,6 +271,30 @@ const handleLogout = async () => {
 .app-bar-user {
   display: flex;
   align-items: center;
+}
+
+.export-zip-button {
+  margin-right: 8px;
+  background-color: var(--accent-color);
+  color: #000;
+  border: none;
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-family: 'Press Start 2P', monospace;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.export-zip-button:hover:not(:disabled) {
+  background-color: var(--button-hover);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.3);
+}
+
+.export-zip-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .user-info {

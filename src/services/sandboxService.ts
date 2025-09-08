@@ -292,6 +292,34 @@ export const sandboxService = {
 
     return 2; // 默认向右移动
   },
+
+  /**
+   * Download latest sources as a ZIP from sandbox backend.
+   * Returns blob and suggested filename parsed from Content-Disposition.
+   */
+  downloadLatestSourcesZip: async (): Promise<{ blob: Blob; filename: string }> => {
+    const response = await sandboxClient.get(
+      "/compile/export/latest-sources.zip",
+      { responseType: "blob" }
+    );
+
+    // Try to extract filename from Content-Disposition
+    const disposition = (response.headers as any)["content-disposition"] || (response.headers as any)["Content-Disposition"];
+    let filename = "latest-sources.zip";
+    if (typeof disposition === "string") {
+      const match = disposition.match(/filename\*=UTF-8''([^;]+)|filename="?([^";]+)"?/i);
+      const raw = match?.[1] || match?.[2];
+      if (raw) {
+        try {
+          filename = decodeURIComponent(raw);
+        } catch {
+          filename = raw;
+        }
+      }
+    }
+
+    return { blob: response.data as Blob, filename };
+  },
 };
 
 /**
